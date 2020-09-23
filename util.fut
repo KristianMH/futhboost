@@ -4,4 +4,4 @@ let arg_max [n] (xs: [n]f32): (i32,f32) =
         else if d2 > d1 then (i2,d2)
         else if i1 < i2 then (i1,d1)
         else (i2,d2)
-    in reduce_comm max (-1i32,-1f32) (zip (iota n) xs)
+    in reduce_comm max (i32.lowest,f32.lowest) (zip (iota n) xs)
