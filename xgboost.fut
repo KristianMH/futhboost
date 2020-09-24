@@ -18,7 +18,7 @@ let get_leaf_weight [n] (gis: [n]f32) (his: [n]f32) (l2: f32): f32 =
   let gsum = reduce (+) 0.0 gis
   let hsum = reduce (+) 0.0 his
   in
-  -gsum/(hsum + l2)
+  0.5*(-gsum/(hsum + l2))
 
 let gain (gl: f32) (hl:f32) (g:f32) (h:f32) (l2: f32) =
   let gr = g-gl
@@ -31,73 +31,79 @@ let gain (gl: f32) (hl:f32) (g:f32) (h:f32) (l2: f32) =
 
 
 -- (leaf_idx, data_idx, data)
-let do_split [n][d][b] (orig_data: [n](i32, i32, [d]f32)) (leaf_data: [b](i32, i32, [d]f32))
+let do_split [n][d][b] (orig_data: [n](i32, i32, [d]f32)) (li: i32) (leaf_data: [b](i32, i32, [d]f32))
                     (dim: i32) (value: f32): [n](i32, i32, [d]f32) =
-  let (leaf_idxs, data_idx, data) = unzip3 leaf_data
-  let new_leaf_idx = map2 (\li data -> if data[dim] <= value then li*2+1 else li*2+2) leaf_idxs data
+  let (_, data_idx, data) = unzip3 leaf_data
+  let new_leaf_idx = map (\data -> if data[dim] <= value then li*2 else li*2+1) data
   let new_data = zip3 new_leaf_idx data_idx data
   in
   -- why copy??!!!
   scatter (copy orig_data) data_idx new_data
   --scatter orig_data data_idx new_data
 
-  
+
+
+let getChildren (i: i32): [2]i32 =
+  [2*i, 2*i+1]
 -- return list of (idx, val) (i32, f32) dim id and split val!
 -- maybe flag wether it is end? leaf-weight!!! calculation
 -- handle missing values ? f32.nan
 let train [n][d] (data: [n][d]f32) (labels: [n]f32) : [](i32, f32, bool) =
-  let max_depth = 1
+  let max_depth= 3
   let inital_preds = replicate n 0.5
   let gis = map2 (\p y -> gradient_mse p y) inital_preds labels
   let his = map2 (\p y -> hessian_mse p y) inital_preds labels
-  let data_x = zip3 (replicate n 0) (iota n) data
-  let l2 = 0
-  in
-  let (_, res, _) =
-    loop (m, tree, data) = (0,[], data_x) while m < max_depth do
-      let (_,splits, data) =
-        loop (j, splits_found, data) =
-          (if m==0 then 0 else 2^(m-1), [], data) while j < 2**m do -- maybe keep list of active leafs?
-             let points_in_leaf = filter (\x -> x.0 == j) data
-             let (_, point_idx, data_points) = unzip3 points_in_leaf
-             let (pos_splits) =
-               loop splits = [] for i < d do -- can be replaced with map! over (iota d)
-               let data_dim = data_points[:,i]
-               let sorted = radix_sort_float_by_key (.1) f32.num_bits f32.get_bit
-                                                    (zip point_idx data_dim)
-               let (sorted_idx, sorted_data) = unzip sorted
-               let sorted_gis = map (\i -> gis[i]) sorted_idx
-               let sorted_his = map (\i -> his[i]) sorted_idx
-               let scan_gis = scan (+) 0.0 sorted_gis
-               let scan_his = scan (+) 0.0 sorted_his
-               let (gm, hm) = (last scan_gis, last scan_his)
-               let gains = map2 (\g h -> gain g h gm hm l2) scan_gis scan_his
-               let (best_split_idx, max_gain) = arg_max gains
-               --let ha = trace best_split_idx
-               -- check bounds?
-               let xgboost_split_val = (sorted_data[best_split_idx] + sorted_data[best_split_idx+1])/2
-               in
-               --splits ++ [(sorted_data[best_split_idx], max_gain)]
-               splits ++ [(xgboost_split_val, max_gain)]
-             --let ha = trace pos_splits
-             let (dim, gain) = arg_max (unzip pos_splits).1
-             let value = pos_splits[dim].0
-             let node_flag = (trace gain) > 0.0
-             let (value, data) = if node_flag then 
-                                 let data = if gain > 0.0 then
-                                              do_split data points_in_leaf dim (trace value)
-                                            else data
-                                 in
-                                   (value, data)
-                                 else
-                                   let gis = map (\i -> gis[i]) point_idx
-                                   let his = map (\i -> his[i]) point_idx
-                                   in
-                                   (get_leaf_weight gis his l2, data)
-             in
-             (j+1, splits_found ++ [(dim, value, node_flag)], trace data)             
+  let data_x = zip3 (replicate n 1) (iota n) data
+  let active_leafs = [1]
+  let l2 = 0.000001
+  let (_, res, _, _) =
+    loop (active_leafs, tree, data, leaf_count) = (active_leafs,[], data_x, 0)
+    while !(null active_leafs) && (log2 leaf_count <= max_depth) do
+      let leaf_idx = head active_leafs
+      let points_in_leaf = filter (\x -> x.0 == leaf_idx) data
+      let (_, point_idx, data_points) = unzip3 points_in_leaf
+      -- let (pos_splits) =
+      --   loop splits = [] for i < d do -- can be replaced with map! over (iota d)
+      let pos_splits = map (\i -> 
+          let data_dim = data_points[:,i]
+          let sorted = radix_sort_float_by_key (.1) f32.num_bits f32.get_bit
+                                             (zip point_idx data_dim)
+          let (sorted_idx, sorted_data) = unzip sorted
+          let sorted_gis = map (\i -> gis[i]) sorted_idx
+          let sorted_his = map (\i -> his[i]) sorted_idx
+          let scan_gis = scan (+) 0.0 sorted_gis
+          let scan_his = scan (+) 0.0 sorted_his
+          let (gm, hm) = (last scan_gis, last scan_his)
+          let gains = map2 (\g h -> gain g h gm hm l2) scan_gis scan_his
+          let (best_split_idx, max_gain) = arg_max gains
+          --let ha = trace best_split_idx
+          -- check bounds?
+          let xgboost_split_val = if best_split_idx < (length sorted_idx)-1 then
+                                    (sorted_data[best_split_idx] + sorted_data[best_split_idx+1])/2
+                                  else
+                                    sorted_data[best_split_idx]
+          in
+          --splits ++ [(sorted_data[best_split_idx], max_gain)]
+          --splits ++ [(xgboost_split_val, max_gain)]
+          (xgboost_split_val, max_gain) ) (iota d)
+      let (dim, gain) = arg_max (unzip pos_splits).1
+      let value = pos_splits[dim].0
+      let new_leaf_count = leaf_count +1
+      let node_flag = (gain > 0.0) && (log2 new_leaf_count < max_depth)
+      let (value, data, new_leafs) =
+        if node_flag then
+        let new_data = do_split data leaf_idx points_in_leaf dim value
+        let new_leafs = (tail active_leafs)  ++  (getChildren leaf_idx)
+        in
+        (value, new_data, new_leafs)
+        else
+        let gis = map (\i -> gis[i]) point_idx
+        let his = map (\i -> his[i]) point_idx
+        let weight = get_leaf_weight gis his l2
+        in
+        (weight, data, tail active_leafs)
       in
-      (m+1, tree++splits, data)
+      (new_leafs, tree++[(dim, value, node_flag)], data, new_leaf_count)
   in
   res
 

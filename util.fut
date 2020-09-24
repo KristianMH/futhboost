@@ -1,3 +1,4 @@
+let log2 x = (loop (y,c) = (x,0i32) while y > 1i32 do (y >> 1, c+1)).1
 let arg_max [n] (xs: [n]f32): (i32,f32) =
     let max ((i1,d1): (i32,f32)) ((i2,d2): (i32,f32)) =
         if d1 > d2 then (i1,d1)
