@@ -48,9 +48,10 @@ let partition_lifted [n][l][d] 't (conds: [l](i32, t)) (op: t -> t -> bool) (shp
   let bool_flag_arr = map bool.i32 flag_arr
   --offset cond to cond val and segment
   let seg_offsets_idx = scan (+) 0 flag_arr |> map (\x -> x-1) 
-    let cs = map2 (\v i -> let (dim, cond_val) = conds[i]
+  let cs = map2 (\v i -> let (dim, cond_val) = conds[i]
                          in !(op v[dim] cond_val)) vals seg_offsets_idx -- apply op
-                -- negate used to support < similar to xgboost
+  -- negate used to support < similar to xgboost i.e true to left
+  -- should pass <=
   let true_ints = map i32.bool cs
   let false_ints = map (\x -> 1-x) true_ints
   let true_offsets = segmented_scan (+) 0 bool_flag_arr true_ints

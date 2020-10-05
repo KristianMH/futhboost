@@ -38,7 +38,10 @@ let getChildren (i: i32): [2]i32 =
 -- maybe flag wether it is end? leaf-weight!!! calculation
 -- handle missing values ? f32.nan
 
-let train_round_v2 [n][d][b] (data: [d][n]i32) (bin_bounds: [d][b]binboundaries)
+
+-- data layout. [d][n] great for hist calculation but not for partition_lifted
+-- perfer [n][d]
+let train_round [n][d][b] (data: [d][n]i32) (bin_bounds: [d][b]binboundaries)
                              (labels: [n]f32) (preds: [n]f32) (max_depth: i32) 
                              (l2: f32) (eta: f32) (gamma: f32) = -- : [](i32, f32, bool, bool) =
   let gis = map2 (\p y -> gradient_mse p y) preds labels
@@ -57,23 +60,24 @@ let train_round_v2 [n][d][b] (data: [d][n]i32) (bin_bounds: [d][b]binboundaries)
     --let data_active = map (\vs -> permute data active_idx) data
     let l_shp = length shp
     let flag_arr = mkFlagArray shp 0 (replicate l_shp 1) l_shp
-
+    -- seg_offsets are multiplied with #num_bins to fit flat representation of [#segs][b] hists
+    -- flatten unflatten are used
     -- let seg_offsets = scanExc (+) 0 flag_arr |> map (*b)
-    -- let gis = permute gis active_leafs :> []f32
+    -- let gis = permute gis active_points_idx :> []f32
     -- let new_hists_gis = map2 (\dim_bins -> 
     --                         let idxs = map2 (+) seg_offsets dim_bins
     --                         let hist_entry =  replicate l_shp <| replicate b 0.0f32
     --                         let flat_seg_hist = reduce_by_index (flatten hist_entry)
     --                                                             (+) 0.0 idxs gis
-    --                         in unflatten l_shp b
+    --                         in unflatten l_shp b flat_seg_hist
     --                          ) data_active :> [d][l_shp][b]f32
-    -- let his = permute his active_leafs
+    -- let his = permute his active_points_idx :> []f32
     -- let new_hists_his = map2 (\dim_bins -> 
     --                         let idxs = map2 (+) seg_offsets dim_data
     --                         let hist_entry =  replicate l_shp <| replicate b 0.0f32
     --                         let flat_seg_hist = reduce_by_index (flatten hist_entry)
     --                                                             (+) 0.0 idxs his
-    --                         in unflatten l_shp b
+    --                         in unflatten l_shp b flat_seg_hist
     --                          ) data_active :> [d][l_shp][b]f32
     
     in
