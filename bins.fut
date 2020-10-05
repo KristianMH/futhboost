@@ -1,5 +1,6 @@
 import "lib/github.com/diku-dk/sorts/radix_sort"
 import "lib/github.com/diku-dk/segmented/segmented"
+import "util"
 
 type binboundaries = (f32, f32) -- min max element in bin
 
@@ -15,17 +16,12 @@ let replicated_iota [n] (reps:[n]i32) (r: i32) : [r]i32 =
 -- assumes vals are sorted!
 -- implement so they upper bounds match xgboost technique? n + (n+1) and 2*n at bound
 let get_bin_bounds [n] (vals: [n]f32) (b: i32) (n_ele: i32) (rest: i32): [b]binboundaries =
-  let ha = replicate b n_ele with [0] = 0
-  --let ha[b-1] = n_ele + rest
-  let lower_bounds_idx = scan (+) 0 ha
+  let bin_sizes = replicate b n_ele 
+  let lower_bounds_idx = scanExc (+) 0 bin_sizes
   let upper_bounds_idx = rotate 1 lower_bounds_idx
   let upper_bounds_idx = map2 (\l u -> if u < l then
-                                         l+n_ele+rest-1 else
+                                         l+n_ele+rest-1 else -- fix off by one for last bin
                                          u-1) lower_bounds_idx upper_bounds_idx
-  -- inplace update wanted to last element instead.
-  -- let upper_bounds_idx = rotate 1 lower_bounds_idx
-  --                            with [b-1] = lower_bounds_idx[b-1] + n_ele + rest
-  --let upper_bounds_idx = map (\t -> t -1) upper_bounds_idx
   in
   map2 (\l u-> (vals[l], vals[u])) (lower_bounds_idx) (upper_bounds_idx)
   -- faster with map map zip?
@@ -57,3 +53,7 @@ let binMap [n] (vals: [n]f32) (b: i32) : ([]i32, [b]binboundaries) =
 entry binMap_test (vals: []f32) (b: i32) =
   (binMap vals b).0
 -- also check bounds
+  -- inplace update wanted to last element instead.
+  -- let upper_bounds_idx = rotate 1 lower_bounds_idx
+  --                            with [b-1] = lower_bounds_idx[b-1] + n_ele + rest
+  --let upper_bounds_idx = map (\t -> t -1) upper_bounds_idx

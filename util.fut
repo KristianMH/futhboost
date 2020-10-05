@@ -1,22 +1,15 @@
 import "lib/github.com/diku-dk/sorts/radix_sort"
 import "lib/github.com/diku-dk/segmented/segmented"
-  --(vals, replicate b (0f32, 0f32))
-             
-                                       
+           
 
+-- exclusive scan
+let scanExc 't [n] (op: t->t->t) (ne: t) (arr : [n]t) : [n]t =
+  scan op ne <| map (\i -> if i>0 then arr[i-1] else ne) (iota n)
 
-
-
-
-
-let create_hist [n] (bin_vals: [n]i32) (vals: [n]f32) (num_binds: i32): [num_binds]f32 =
-  let dest = replicate num_binds 0.0f32
-  in
-  reduce_by_index dest (+) 0.0 bin_vals vals
-
-
+-- log2 of x
 let log2 x = (loop (y,c) = (x,0i32) while y > 1i32 do (y >> 1, c+1)).1
 
+-- permutes array
 let permute [n][m] 't (xs: [n]t) (idxs: [m]i32): [m]t =
   map (\i -> xs[i]) idxs
 
