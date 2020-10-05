@@ -10,16 +10,16 @@ a[:,2] = 3*a[:,0]+2*a[:,1]+np.random.rand(1,10)*2
 test = xgb.DMatrix(a[:,:2], label=a[:,2])
 param = {"objective":"reg:squarederror", "max_depth":3, "eta":0.3, "reg_lambda":0.5,
          "tree_method":"exact"}
-num_round=20
+num_round=3
 #progress = dict()
 watchlist  = [(test, "val-rmse"), (train,'train-rmse')]
 bst = xgb.train(param, train, num_round, watchlist)
 print(bst.predict(train))
 #print(progress)
 #print(bst.get_dump())
-# for i in range(num_round):
-#     xgb.plot_tree(bst, num_trees=i)
-#     plt.show()
+for i in range(num_round):
+    xgb.plot_tree(bst, num_trees=i)
+    plt.show()
 #bst.dump_model("model.b")
 #bst.tree()
 
