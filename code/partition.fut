@@ -1,50 +1,11 @@
 import "lib/github.com/diku-dk/segmented/segmented"
 import "util"
 
--- addded resulting length to handle errors
-let segmented_reduce [n] 't (op: t -> t -> t) (ne: t)
-                            (flags: [n]bool) (as: [n]t) (r: i32) : [r]t =
-  -- Compute segmented scan.  Then we just have to fish out the end of
-  -- each segment.
-  let as' = segmented_scan op ne flags as
-  -- Find the segment ends.
-  let segment_ends = rotate 1 flags
-  -- Find the offset for each segment end.
-  let segment_end_offsets = segment_ends |> map i32.bool |> scan (+) 0
-  --let num_segments = if n > 0 then last segment_end_offsets else 0
-  -- Make room for the final result.  The specific value we write here
-  -- does not matter; they will all be overwritten by the segment
-  -- ends.
-  let scratch = replicate r ne
-  -- Compute where to write each element of as'.  Only segment ends
-  -- are written.
-  let index i f = if f then i-1 else -1
-  in scatter scratch (map2 index segment_end_offsets segment_ends) as'  
-
--- creates flag array with shape defined by aoa_shp and values from aoa_val
--- r is to specify returned length to handle compiler warnings.
-let mkFlagArray 't [m] 
-            (aoa_shp: [m]i32) (zero: t)       
-            (aoa_val: [m]t  ) (r: i32) : [r]t =   
-  let shp_rot = map (\i->if i==0 then 0       
-                         else aoa_shp[i-1]
-                    ) (iota m)
-  let shp_scn = scan (+) 0 shp_rot            
-  --let aoa_len = shp_scn[m-1]+aoa_shp[m-1] not needed.    
-  let shp_ind = map2 (\shp ind ->             
-                       if shp==0 then -1      
-                       else ind               
-                     ) aoa_shp shp_scn        
-  in scatter (replicate r zero)        
-             shp_ind aoa_val
-
-
-
 -- -- perserves shape, assumes vals non-empty otherwise pass ne?
 -- operator: val[i] < limit
 let partition_lifted [n][l][d] 't (conds: [l](i32, t)) (op: t -> t -> bool) (shp: [l]i32)
                                   (vals: [n][d]t) : ([n][d]t, []i32) = 
-  let flag_arr = mkFlagArray shp 0 (replicate l 1) n
+  let flag_arr = mkFlagArray shp 0 1 n
   let bool_flag_arr = map bool.i32 flag_arr
   --offset cond to cond val and segment
   let seg_offsets_idx = scan (+) 0 flag_arr |> map (\x -> x-1) 
@@ -68,20 +29,34 @@ let partition_lifted [n][l][d] 't (conds: [l](i32, t)) (op: t -> t -> bool) (shp
   let idxs = map3 (\c iT oT -> if c then iT else oT) cs true_val_offsets false_val_offsets
   in
   (scatter (replicate n vals[0]) idxs vals, num_false_segs)
-  -- ne parameter pass to function? not needed.
+  -- ne parameter pass to function? not needed as everything get overwritten
 
 
 -- tests partition_lifted
 -- ==
--- entry: partition_lifted_test
+-- entry: partition_lifted_test_splits
 -- input { [1,0] [3,4] [2,3] [[1,10], [0, 1], [3, 5], [100, 5], [-3, -4]] }
 -- output {[[0,1], [1,10], [3,5], [-3,-4], [100,5]]}
 -- input { [1,0] [1000,1000] [2,3] [[1,10], [0, 1], [3, 5], [100, 5], [-3, -4]] }
 -- output {[[1,10], [0, 1], [3, 5], [100, 5], [-3, -4]]}
 -- input { [1,0] [-1000,-1000] [2,3] [[1,10], [0, 1], [3, 5], [100, 5], [-3, -4]] }
 -- output {[[1,10], [0, 1], [3, 5], [100, 5], [-3, -4]]}
-entry partition_lifted_test (dims: []i32) (conds: []i32) (shp: []i32)
+-- input {[1] [3] [8] [[10,3], [3,1], [5,2], [10, -3], [30,30], [4,3], [1,1], [3,0]]}
+-- output {[[3,1], [5,2], [10,-3], [1,1], [3,0], [10,3], [30, 30], [4,3]]}
+entry partition_lifted_test_splits (dims: []i32) (conds: []i32) (shp: []i32)
                                   (vals: [][]i32) =
   (partition_lifted (zip dims conds) (<) shp vals).0
 -- missing tests. zero shp however wont be encountered in boosting trees though.
--- replicate and tests offsets!
+-- ==
+-- entry: partition_lifted_test_idxs
+-- input { [1,0] [3,4] [2,3] [[1,10], [0, 1], [3, 5], [100, 5], [-3, -4]] }
+-- output {[1, 2]}
+-- input { [1,0] [1000,1000] [2,3] [[1,10], [0, 1], [3, 5], [100, 5], [-3, -4]] }
+-- output {[2, 3]}
+-- input { [1,0] [-1000,-1000] [2,3] [[1,10], [0, 1], [3, 5], [100, 5], [-3, -4]] }
+-- output {[0,0]}
+-- input {[1] [3] [8] [[10,3], [3,1], [5,2], [10, -3], [30,30], [4,3], [1,1], [3,0]]}
+-- output {[5]}
+entry partition_lifted_test_idxs (dims: []i32) (conds: []i32) (shp: []i32)
+                                  (vals: [][]i32) =
+  (partition_lifted (zip dims conds) (<) shp vals).1

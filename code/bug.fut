@@ -1,5 +1,8 @@
 import "partition"
 import "bins"
+
+
+
 let train_round_v2 [n][d][b] (data: [d][n]i32) (bin_bounds: [d][b]binboundaries)
                              (labels: [n]f32) (preds: [n]f32) (max_depth: i32) 
                              (l2: f32) (eta: f32) (gamma: f32) = -- : [](i32, f32, bool, bool) =
@@ -12,10 +15,8 @@ let train_round_v2 [n][d][b] (data: [d][n]i32) (bin_bounds: [d][b]binboundaries)
     loop (active_leafs, tree, shp, i, active_idx) =
       (active_leafs, [], shp_x, 0, active_points_idx)
       while (i < max_depth) && !(null active_leafs) do
-    -- active gis and his as well? or loop it around
-    --let data_active = map (\vs -> permute data active_idx) data
     let l_shp = length shp
-    let flag_arr = mkFlagArray shp 0 (replicate l_shp 1) l_shp
+    let flag_arr = mkFlagArray shp 0 1 l_shp
     in
     (active_leafs, tree, shp ++ [1], i+1, active_idx)
       

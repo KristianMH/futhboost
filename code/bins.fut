@@ -16,11 +16,11 @@ let replicated_iota [n] (reps:[n]i32) (r: i32) : [r]i32 =
 -- assumes vals are sorted!
 -- implement so they upper bounds match xgboost technique? n + (n+1) and 2*n at bound
 let get_bin_bounds [n] (vals: [n]f32) (b: i32) (n_ele: i32) (rest: i32): [b]binboundaries =
-  let bin_sizes = replicate b n_ele 
-  let lower_bounds_idx = scanExc (+) 0 bin_sizes
-  let upper_bounds_idx = rotate 1 lower_bounds_idx
-  let upper_bounds_idx = map2 (\l u -> if u < l then
-                                         l+n_ele+rest-1 else -- fix off by one for last bin
+  let bin_sizes = replicate b n_ele
+  let lower_bounds_idx = scanExc (+) 0 bin_sizes 
+  let upper_bounds_idx = rotate 1 lower_bounds_idx 
+  let upper_bounds_idx = map2 (\l u -> if u <= l then
+                                         l+n_ele+rest-1 else -- fix for last bin or single_bin
                                          u-1) lower_bounds_idx upper_bounds_idx
   in
   map2 (\l u-> (vals[l], vals[u])) (lower_bounds_idx) (upper_bounds_idx)
@@ -28,7 +28,8 @@ let get_bin_bounds [n] (vals: [n]f32) (b: i32) (n_ele: i32) (rest: i32): [b]binb
 
 
 -- handle when n < b ?
-let binMap [n] (vals: [n]f32) (b: i32) : ([]i32, [b]binboundaries) =
+-- assumes b > 0
+let binMap [n] (vals: [n]f32) (b: i32) : ([n]i32, [b]binboundaries) =
   let dest = replicate n 0i32
   let num_ele_in_bin = n / b
   let rest = n % b
@@ -41,6 +42,7 @@ let binMap [n] (vals: [n]f32) (b: i32) : ([]i32, [b]binboundaries) =
   (scatter dest s_idx bin_vals, bin_bounds)
   -- scatter dest s_idx bin_vals
 
+let a = [10.3f32, 9.32, 4.32, 3.0, 100.3, 304.3]
 
 
 -- tests binMap
@@ -50,10 +52,39 @@ let binMap [n] (vals: [n]f32) (b: i32) : ([]i32, [b]binboundaries) =
 -- output {[0, 0, 2, 2, 1, 2, 2, 1, 0, 1]}
 -- input { [1.0f32, 2.3, 42.1, 249.2, -100.0] 2}
 -- output {[0, 1, 1, 1, 0]}
+-- input {[10.3f32, 9.32, 4.32, 3.0, 100.3, 304.3] 1}
+-- output {[0, 0, 0, 0, 0, 0]}
 entry binMap_test (vals: []f32) (b: i32) =
   (binMap vals b).0
--- also check bounds
-  -- inplace update wanted to last element instead.
-  -- let upper_bounds_idx = rotate 1 lower_bounds_idx
-  --                            with [b-1] = lower_bounds_idx[b-1] + n_ele + rest
-  --let upper_bounds_idx = map (\t -> t -1) upper_bounds_idx
+
+-- ==
+-- entry: binMap_test_lower_bounds
+-- input { [1.1f32, -3.2, 100.3, 20.3, 10.4, 39.2, 304.3, 7.0, -10.3, 3.3] 3}
+-- output {[-10.3f32, 3.3, 20.3]}
+-- input {[1.0f32, 2.3, 42.1, 249.2, -100.0] 2}
+-- output {[-100.0f32, 2.3]}
+entry binMap_test_lower_bounds (vals: []f32) (b: i32) =
+  (binMap vals b).1 |> unzip |> (.0)
+
+-- ==
+-- entry: binMap_test_upper_bounds
+-- input { [1.1f32, -3.2, 100.3, 20.3, 10.4, 39.2, 304.3, 7.0, -10.3, 3.3] 3}
+-- output {[1.1f32, 10.4, 304.3]}
+-- input {[1.0f32, 2.3, 42.1, 249.2, -100.0] 2}
+-- output {[1.0f32, 249.2]}
+entry binMap_test_upper_bounds (vals: []f32) (b: i32) =
+  (binMap vals b).1 |> unzip |> (.1)
+
+
+
+
+
+
+
+
+
+
+-- inplace update wanted to last element instead.
+-- let upper_bounds_idx = rotate 1 lower_bounds_idx
+--                            with [b-1] = lower_bounds_idx[b-1] + n_ele + rest
+--let upper_bounds_idx = map (\t -> t -1) upper_bounds_idx
