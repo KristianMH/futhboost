@@ -15,6 +15,7 @@ Actual:   *[loop₃₀]a₄₉
 
 Cannot unify size variable "l_shp" with "loop₃₀" (scope violation).
 This is because "l_shp" is rigidly bound in a deeper scope.
+(using futhark 18.0)
 
 l_shp is the length of shape array i.e. number of segments it is dynamic i.e. changes
 for each iteration however not sure what this error tells me regarding to scope violation.
@@ -42,3 +43,7 @@ returned size of the function i.e. banMap takes n vals returns n bin_numbers
 otherwise the compiler did object :)
 Is there a signifanct advantage of having exact result sizes known at compile time
 i.e. [n]i32 vs []i32
+
+
+The wip.fut and xgboost.fut needs to cleaned up (currently it contains three versions of naive
+algorithm, but they are not a great intrest for now.)
