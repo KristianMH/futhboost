@@ -36,7 +36,6 @@ let getChildren (i: i32): [2]i32 =
   [2*i, 2*i+1]
 
 
-let tuple_math 't (op: t -> t-> t)(n1: (t,t)) (n2: (t,t)) = (op n1.0 n2.0, op n1.1 n2.1)
 
 -- find the best split within a dimension
 -- returns (gain, split_val, missing_dir, node_left, node_right)
@@ -54,7 +53,7 @@ let find_split_hist [m] (g_hist: [m]f32) (h_hist: []f32) (bin_bounds: [m]binboun
   in (best_gain, split_val, flags[best_split_idx], node_left, node_right)
 
 
--- reduce map should be implemented I think- work in progress
+-- reduce with map2 should be implemented I think- work in progress
 let find_best_splits [d][s] (splits: [d][s](f32, f32, bool, node_vals, node_vals))
                             : [s](f32, f32, bool, node_vals, node_vals) =
   splits[0]
@@ -135,7 +134,8 @@ let train_round [n][d][b] (data: [d][n]i32) (bin_bounds: [d][b]binboundaries)
     -- new leafs can be calulated from partiton
     -- should data, gis, his be updated or keep an active_points array
     -- and then load everything at start of loop?
-    
+
+    -- tree will be updated with scatter
     in
     (leafs, tree, i+1, data, gis, his, active_points_idx)
       

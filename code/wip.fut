@@ -83,7 +83,7 @@ let do_split_v2 [n][d][m] (orig_data: [n](i32, i32, [d]f32)) (li: i32) (point_id
                               li*2+1) points
   let new_data = zip3 new_leaf_idx point_idxs points
   in
-  -- why copy??!!!
+  -- copy..
   scatter (copy orig_data) point_idxs new_data
   --scatter orig_data point_idxs new_data
 

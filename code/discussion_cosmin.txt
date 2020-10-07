@@ -1,0 +1,44 @@
+Hi cosmin
+
+The primarily histogram algorithm is implemented in histboost.fut at train_round which
+does the tree creation.
+I am bit unsure wether to have data, gradient_values and hessian_values (data, gis, his)
+passed around in the loop and updating them with scatter before loop termination or
+simply keep an array of active points, where shp (segment_shps) gives the leaf id which points
+belong to. I will give an better overview at monday and we can discuss this.
+
+The compiler error I thought was solved reappered with compiling histboost.fut:
+Error at histboost.fut:130:65-66:
+Cannot apply "search_splits_segs" to "GS" (invalid type).
+Expected: [l_shp]f32
+Actual:   *[loop₃₀]a₄₉
+
+Cannot unify size variable "l_shp" with "loop₃₀" (scope violation).
+This is because "l_shp" is rigidly bound in a deeper scope.
+
+l_shp is the length of shape array i.e. number of segments it is dynamic i.e. changes
+for each iteration however not sure what this error tells me regarding to scope violation.
+
+Currently the reduction from [d][#segs] to [#segs] i.e. finding the best split over each
+dimension is abit troublesome. My initial idea is to implement it as a reduce where the
+operator is a map2 over segment arrays choosing the best for each segment.
+Guess it corresponds the redoMap which were introduced in PFP lecture 3 (2019) reduce (map)
+If will pursuit this approach for now but if you a good idea to this row-wise reduction of a
+[d][s] array to [s] 
+
+
+
+Partition.fut contains my implementation of partition lifted, but I am unsure if we
+discussed it last time but a different value in (<) condition should be applied for each segment
+Currently it is at a "raw" stage and can be optimized some more (likely in indicies caluation)
+but seems to work to now.
+
+Bins.fut contains the mapping of values to bin numbers. fairly simple but need to investigate
+if n < b should be supported (Do not think so as it makes no sense at all).
+
+I had to pass a length parameter to some of the helper functions
+(replicated_iota and segmented_reduce in util.fut) inorder to allow specifying
+returned size of the function i.e. banMap takes n vals returns n bin_numbers
+otherwise the compiler did object :)
+Is there a signifanct advantage of having exact result sizes known at compile time
+i.e. [n]i32 vs []i32
