@@ -8,7 +8,7 @@
 !*/
 
 *.c
-lib/
+#lib/
 data/
 *.actual
 *.expected
