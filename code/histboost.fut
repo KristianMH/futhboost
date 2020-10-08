@@ -19,12 +19,14 @@ let cost (gis: []f32) (his: []f32) (lamda: f32): f32 =
   in
   - gsum**2 / (2.0*(hsum + lamda))
 
-let get_leaf_weight [n] (gis: [n]f32) (his: [n]f32) (l2: f32) (eta: f32)
-                       : f32 =
-  let gsum = reduce (+) 0.0 gis
-  let hsum = reduce (+) 0.0 his
+let get_leaf_weight [n][s] (gis: [n]f32) (his: [n]f32) (shp: [s]i32) (l2: f32) (eta: f32)
+                       : [s]f32 =
+  let terminal_flag_arr = mkFlagArray shp false true n
+  let gissums = segmented_reduce (+) 0f32 terminal_flag_arr gis s
+  let hissums = segmented_reduce (+) 0f32 terminal_flag_arr his s
   in
-  eta*(-gsum/(hsum + l2))-- + min_weight
+  map2 (\gs hs -> eta*(-gs/(hs+l2))) gissums hissums
+       --eta*(-gsum/(hsum + l2))-- + min_weight
 
 
 let gain (gl: f32) (hl: f32) (g: f32) (h: f32) (l2: f32) (gamma: f32) : (f32, bool) =
@@ -47,17 +49,30 @@ let find_split_hist [m] (g_hist: [m]f32) (h_hist: []f32) (bin_bounds: [m]binboun
   let gains = map2 (\gl hl -> gain gl hl g h l2 gamma) gls hls
   let (gains, flags) = unzip gains
   let (best_split_idx, best_gain) = arg_max gains
-  let split_val = bin_bounds[best_split_idx] |> (.1) -- max.
+  let split_val = bin_bounds[best_split_idx] |> (.1) -- max. or min?
   let node_left = (gls[best_split_idx], hls[best_split_idx])
   let node_right = tuple_math (-) (g,h) node_left
   in (best_gain, split_val, flags[best_split_idx], node_left, node_right)
 
 
 -- reduce with map2 should be implemented I think- work in progress
-let find_best_splits [d][s] (splits: [d][s](f32, f32, bool, node_vals, node_vals))
-                            : [s](f32, f32, bool, node_vals, node_vals) =
-  splits[0]
-
+-- input (gain, dim_idx, seg_id)
+let find_best_splits [d][s] (splits: [d][s](f32, i32, i32))
+                             : [s](f32, i32, i32) =
+  let max [s] (d1: [s](f32, i32, i32)) (d2: [s](f32, i32, i32))
+                                       : [s](f32, i32, i32) =
+    map2 (\x y ->
+            let (g1, d1, _) = x
+            let (g2, d2, _) = y
+            in
+            if g1 > g2 then x
+                  else if g2 > g2 then y
+                  else if d1 > d2 then x
+                  else y) d1 d2
+  let ne = replicate s (f32.lowest, 0, 0)
+  in
+  reduce_comm max ne splits --prove if max is commutative
+    
 -- maps over each dim -> map over each segment, everything should be regular with histograms
 -- returns (dim_idx, split_val, is_leaf?, missing_dir, node_left, node_right)
 let search_splits_segs [d][s][m] (g_hists: [d][s][m]f32) (h_hists: [d][s][m]f32)
@@ -70,10 +85,22 @@ let search_splits_segs [d][s][m] (g_hists: [d][s][m]f32) (h_hists: [d][s][m]f32)
                     find_split_hist g_hist h_hist bin_bound g h l2 gamma)
                  seg_g_hist seg_h_hist g_node h_node 
          ) g_hists h_hists bin_bounds :> [d][s](f32, f32, bool, node_vals, node_vals)
-  let best_splits = find_best_splits best_splits_dim
+  let (gains, split_vals, missing_dirs, left_nodes, right_nodes) = map unzip5 best_splits_dim |> unzip5
+  let dim_mat = map (\i -> replicate s i ) (iota d)
+  let seg_mat = map (\_ -> iota s) (iota d)
+  let best_splits = find_best_splits (map3 zip3 gains dim_mat seg_mat)
+  
   -- need to add terminal leaf flag but then done.
   in
-  replicate s (0, 0.0, false, false, (0.0,0.0), (0.0,0.0))
+  map (\(gain, dim_id, seg_id) ->
+         if gain > 0.0 then
+         let split_val = split_vals[dim_id, seg_id]
+         let missing_dir = missing_dirs[dim_id, seg_id]
+         let left_node = left_nodes[dim_id, seg_id]
+         let right_node = right_nodes[dim_id, seg_id]
+         in (dim_id, split_val, missing_dir, false, left_node, right_node)
+         else
+           (0, 0.0, false, true, (0.0, 0.0), (0.0, 0.0))) best_splits
 
 
 
@@ -104,7 +131,7 @@ let train_round [n][d][b] (data: [d][n]i32) (bin_bounds: [d][b]binboundaries)
       while (i < max_depth) && !(null leafs) do
     -- active gis and his as well? or loop it around
     --let data_active = map (\vs -> permute data active_idx) data
-    let (shp, leaf_id_active, GH) = unzip3 leafs -- leaf data, shp is num points in each seg
+    let (shp, active_leafs, GH) = unzip3 leafs -- leaf data, shp is num points in each seg
     let l_shp = length shp -- #num leafs
     let (GS, HS) = unzip GH -- parent infomation for each segment
     let flag_arr = mkFlagArray shp 0 1 (length active_points_idx)
@@ -117,19 +144,37 @@ let train_round [n][d][b] (data: [d][n]i32) (bin_bounds: [d][b]binboundaries)
                             let flat_seg_hist = reduce_by_index hist_entry
                                                                 (+) 0.0 idxs gis
                             in unflatten l_shp b flat_seg_hist
-                             ) data --:> [d][l_shp][b]f32
+                             ) data :> [d][l_shp][b]f32
     let new_hists_his = map (\dim_bins -> 
                             let idxs = map2 (+) seg_offsets dim_bins
                             let hist_entry =  replicate (l_shp*b) 0.0f32
                             let flat_seg_hist = reduce_by_index hist_entry
                                                                 (+) 0.0 idxs his
                             in unflatten l_shp b flat_seg_hist
-                             ) data --:> [d][l_shp][b]f32
+                             ) data :> [d][l_shp][b]f32
 
     let splits = search_splits_segs new_hists_gis new_hists_his GS HS bin_bounds
                                     l2 gamma
     -- splits should be [s](i32, f32, bool, bool, node_vals, node_vals)
-                      -- (filter out terminal leafs)
+    -- (dim_idx, split_val, missing_dir, terminal_flag, left_node, right_node)
+    let terminal_flag = map (.3) splits
+    let seg_idxs = scan (+) 0 flag_arr
+    let cs = map (\i -> conds[i-1]) seg_idxs
+    let (shp_i, shps_permute_idxs) = get_permute_idxs terminal_flag
+    let (split_i, points_idxs) = get_permute_idxs cs
+    -- (partition out terminal leafs on points)
+    let (new_shp, terminal_shp) = permute shp shps_permute_idxs |> split shp_i
+    let (active_leafs, terminal_leafs) = permute active_leafs shps_permute |> split split_i
+    -- leaf_idxs! match terminal leafs and active leafs for scatter.
+    let (data, _) = permute data point_permute |> split split_i
+    let (gis, gis') = permute gis point_permute |> split split_i
+    let (his, his') = permute his point_permute |> split split_i
+    -- permute vs scatter performance?
+    let leaf_weights = get_leaf_weight gis' his' terminal_shp l2 eta
+    -- scatter tree terminal_leafs map (\w ->(0,w,false, true)) leaf_weights
+    -- process active_leafs
+    let dims = map (.0) splits
+    let missing_flags = map (.2) splits -- solve dealing with flags
     -- then partition_lifted can be used with [s](i32, f32) on data (i.e. do_splits)
     -- new leafs can be calulated from partiton
     -- should data, gis, his be updated or keep an active_points array

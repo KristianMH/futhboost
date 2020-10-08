@@ -62,3 +62,23 @@ let replicated_iota [n] (reps:[n]i32) (r: i32) : [r]i32 =
   let flags = map (>0) tmp
   in segmented_scan (+) 0 flags tmp
 
+
+
+let get_permute_idxs [n] (conds: [n]bool) : (i32, [n]i32) =
+  let tfs = map i32.bool conds
+  let true_idxs = scan (+) 0 tfs
+  let ffs = map (\t -> 1-t) tfs
+  let i =  last true_idxs
+  let false_idxs = scan (+) 0 ffs |> map (+i)
+  let idxs = map3 (\c iT iF -> if c then iT-1 else iF-1) conds true_idxs false_idxs
+  in
+  (i, idxs)
+
+
+-- let segmented_partition_idxs [s] (conds: [s]bool) (shp: [s]i32)
+--                                  : ((i32, i32), []i32, [s]i32) =
+
+--   let (i, xs) = get_permute_idxs cs
+--   let (i_segs, shp) = get_permute_idxs conds
+--   in
+--   ((i, i_segs), xs, shp)
