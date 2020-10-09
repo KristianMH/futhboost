@@ -75,6 +75,9 @@ let get_permute_idxs [n] (conds: [n]bool) : (i32, [n]i32) =
   (i, idxs)
 
 
+
+let calc_new_shape [s] (s1: [s]i32) (s2: [s]i32) : []i32 =
+ map2 (\i j -> [j, i-j]) s1 s2 |> flatten
 -- let segmented_partition_idxs [s] (conds: [s]bool) (shp: [s]i32)
 --                                  : ((i32, i32), []i32, [s]i32) =
 

@@ -126,7 +126,7 @@ let train_round [n][d][b] (data: [d][n]i32) (bin_bounds: [d][b]binboundaries)
   let root = zip3 [1] [n] [(0, 0)]
   -- combine active_leafs and shp? most likely
   let (_, res, _, _, _, _, _ ) =  --loop gis and his?
-    loop (leafs, tree, i, data, gis, his, active_points_idx) =
+    loop (leafs, tree, i, data, gis, his, active_points_idx) = -- need active_point_idxs?
       (root, tree, 0, data_x, gis, his, active_points_idx)
       while (i < max_depth) && !(null leafs) do
     -- active gis and his as well? or loop it around
@@ -134,7 +134,7 @@ let train_round [n][d][b] (data: [d][n]i32) (bin_bounds: [d][b]binboundaries)
     let (shp, active_leafs, GH) = unzip3 leafs -- leaf data, shp is num points in each seg
     let l_shp = length shp -- #num leafs
     let (GS, HS) = unzip GH -- parent infomation for each segment
-    let flag_arr = mkFlagArray shp 0 1 (length active_points_idx)
+    let flag_arr = mkFlagArray shp 0 1 (length gis)
     -- seg_offsets are multiplied with #num_bins to fit flat representation of [#segs][b] hists
     -- flatten unflatten are used or not?
     let seg_offsets = scanExc (+) 0 flag_arr |> map (*b)
@@ -157,13 +157,13 @@ let train_round [n][d][b] (data: [d][n]i32) (bin_bounds: [d][b]binboundaries)
                                     l2 gamma
     -- splits should be [s](i32, f32, bool, bool, node_vals, node_vals)
     -- (dim_idx, split_val, missing_dir, terminal_flag, left_node, right_node)
-    let terminal_flag = map (.3) splits
+    let terminal_flag = map (.3) splits |> map (!) -- flip bool
     let seg_idxs = scan (+) 0 flag_arr
     let cs = map (\i -> conds[i-1]) seg_idxs
-    let (shp_i, shps_permute_idxs) = get_permute_idxs terminal_flag
+    let (seg_i, shps_permute_idxs) = get_permute_idxs terminal_flag
     let (split_i, points_idxs) = get_permute_idxs cs
     -- (partition out terminal leafs on points)
-    let (new_shp, terminal_shp) = permute shp shps_permute_idxs |> split shp_i
+    let (active_shp, terminal_shp) = permute shp shps_permute_idxs |> split seg_i
     let (active_leafs, terminal_leafs) = permute active_leafs shps_permute |> split split_i
     -- leaf_idxs! match terminal leafs and active leafs for scatter.
     let (data, _) = permute data point_permute |> split split_i
@@ -171,16 +171,28 @@ let train_round [n][d][b] (data: [d][n]i32) (bin_bounds: [d][b]binboundaries)
     let (his, his') = permute his point_permute |> split split_i
     -- permute vs scatter performance?
     let leaf_weights = get_leaf_weight gis' his' terminal_shp l2 eta
-    -- scatter tree terminal_leafs map (\w ->(0,w,false, true)) leaf_weights
     -- process active_leafs
+
+    
     let dims = map (.0) splits
+    let split_vals = map (.1) splits
     let missing_flags = map (.2) splits -- solve dealing with flags
     -- then partition_lifted can be used with [s](i32, f32) on data (i.e. do_splits)
     -- new leafs can be calulated from partiton
     -- should data, gis, his be updated or keep an active_points array
     -- and then load everything at start of loop?
 
-    -- tree will be updated with scatter
+    -- tree will be updated with scatter -- need to combine for now.
+    let tree = scatter tree terminal_leafs map (\w ->(0,w,false, true)) leaf_weights
+    let tree = scatter tree active_leafs  filter (\t -> !t.3) (zip4 dims split_vals missing_flags terminal_flags)
+    
+    let (data, shape) = partiton_lifted (zip dims split_vals) < active_shp data
+    let new_shp = calc_new_shape active_shp shape
+    let active_leafs = map getChildren active_leafs |> flatten
+    let left_nodes = map (.4) splits
+    let right_nodes = map (.5) splits
+    let GH = map2 (\ln rn -> [ln, rn]) left_nodes right_nodes |> flatten
+    let leafs = zip3 new_shp active_leafs GH
     in
     (leafs, tree, i+1, data, gis, his, active_points_idx)
       
