@@ -65,11 +65,11 @@ let replicated_iota [n] (reps:[n]i32) (r: i32) : [r]i32 =
 
 
 let get_permute_idxs [n] (conds: [n]bool) : (i32, [n]i32) =
-  let tfs = map i32.bool conds
-  let true_idxs = scan (+) 0 tfs
-  let ffs = map (\t -> 1-t) tfs
+  let true_flags = map i32.bool conds
+  let true_idxs = scan (+) 0 true_flags
+  let false_flags = map (\t -> 1-t) true_flags
   let i =  last true_idxs
-  let false_idxs = scan (+) 0 ffs |> map (+i)
+  let false_idxs = scan (+) 0 false_flags |> map (+i)
   let idxs = map3 (\c iT iF -> if c then iT-1 else iF-1) conds true_idxs false_idxs
   in
   (i, idxs)
