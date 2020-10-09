@@ -183,8 +183,9 @@ let train_round [n][d][b] (data: [d][n]i32) (bin_bounds: [d][b]binboundaries)
     -- and then load everything at start of loop?
 
     -- tree will be updated with scatter -- need to combine for now.
-    let tree = scatter tree terminal_leafs map (\w ->(0,w,false, true)) leaf_weights
-    let tree = scatter tree active_leafs  filter (\t -> !t.3) (zip4 dims split_vals missing_flags terminal_flags)
+    let tree1 = scatter tree (map (\t -> t-1) terminal_leafs) map (\w ->(0,w,false, true)) leaf_weights
+    let tree2 = scatter tree1 (map (\t -> t-1) active_leafs)
+                        (filter (\t -> !t.3) (zip4 dims split_vals missing_flags terminal_flags))
     
     let (data, shape) = partiton_lifted (zip dims split_vals) < active_shp data
     let new_shp = calc_new_shape active_shp shape
@@ -194,7 +195,7 @@ let train_round [n][d][b] (data: [d][n]i32) (bin_bounds: [d][b]binboundaries)
     let GH = map2 (\ln rn -> [ln, rn]) left_nodes right_nodes |> flatten
     let leafs = zip3 new_shp active_leafs GH
     in
-    (leafs, tree, i+1, data, gis, his, active_points_idx)
+    (leafs, tree2, i+1, data, gis, his, active_points_idx)
       
   in
   res
