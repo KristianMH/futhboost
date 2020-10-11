@@ -23,7 +23,6 @@ let predict (x: []f32) (tree: [](i32, f32, bool, bool)) : f32 =
         else
           (i*2+1, value, at_node)
       else
-        -- +0.5 due to initial pred of 0.5
         (i, v, flag)
   in
   res

@@ -85,3 +85,49 @@ let calc_new_shape [s] (s1: [s]i32) (s2: [s]i32) : []i32 =
 --   let (i_segs, shp) = get_permute_idxs conds
 --   in
 --   ((i, i_segs), xs, shp)
+
+-- let (_, new_tree, data, new_leafs) =
+--   loop (active_leafs, new_tree, data, new_leafs) = (active_leafs, tree, data, [])
+--   while !(null active_leafs) do
+--   let leaf_idx = head active_leafs
+--         -- add singleton check?
+--         let (_, point_idxs, data_points) = filter (\x -> x.0 == leaf_idx) data |> unzip3
+--         in
+--         if length point_idxs == 1 then -- cannot split node with one ele :) -- min size?
+--         let point_idx = (head point_idxs)
+--         let weight = eta*(-gis[point_idx]/(his[point_idx]+l2)) --+ min_weight
+--         let new_tree = scatter new_tree [leaf_idx-1] [(0, weight, false, false)]
+
+--         in
+--         (tail active_leafs, new_tree, data, new_leafs)
+--         else
+--         let gis = map (\i -> gis[i]) point_idxs
+--         let his = map (\i -> his[i]) point_idxs -- scatter conflict?
+--         let pos_splits = map (\i -> search_splits data_points[:,i] gis his
+--                                                   l2 gamma) (iota d)
+--         let (vals, gains, missing_flags) = unzip3 pos_splits
+--         let (split_dim, gain) = arg_max gains
+--         let value = vals[split_dim]
+--         let missing_flag = missing_flags[split_dim]
+--         let node_flag = gain > 0.0 && l < (max_depth-1)
+--         let (value, data, new_leafs) =
+--           if node_flag then
+--               -- let (data_lidxs, data_pidx, data_p) = unzip3 data
+--               -- let new_data_lidxs = do_split data_lidxs leaf_idx point_idxs data_points
+--               --                               split_dim value missing_flag
+--               let ndata = do_split data leaf_idx point_idxs data_points split_dim value missing_flag
+--               let new_leafs = new_leafs ++ (getChildren leaf_idx)
+--               in
+--               -- (value, zip3 new_data_lidxs data_pidx data_p, new_leafs)
+--               (value, ndata, new_leafs)
+--           else
+--           let weight = get_leaf_weight gis his l2 eta
+--           in
+--               --(weight, data, if null new_leafs then new_leafs else tail new_leafs) -- check if lastleaf?
+--               (weight, data, new_leafs)
+--         let new_tree = scatter new_tree [leaf_idx-1]
+--                                [(split_dim, value, node_flag, missing_flag)]
+--         in
+--         (tail active_leafs, new_tree, data, new_leafs)
+-- in
+-- (new_leafs, new_tree, data)
