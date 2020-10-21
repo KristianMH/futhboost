@@ -15,20 +15,30 @@ let permute [n][m] 't (xs: [n]t) (idxs: [m]i32): [m]t =
 -- operator applied elementwise on tuple of length 2
 let tuple_math 't (op: t -> t-> t)(n1: (t,t)) (n2: (t,t)) = (op n1.0 n2.0, op n1.1 n2.1)
 
+
+let scatter2D [m][d][n] 't (arr2D: *[m][d]t) (inds: [n]i64) (vals2D: [n][d]t): *[m][d]t =
+  let flat_length = n*d
+  let flat_inds = map (\i -> let (k, r) = (i / d,
+                                           i % d)
+                             in (inds[k]*d + r) ) (iota flat_length)
+  let res = scatter (flatten arr2D) flat_inds (flatten vals2D :> [flat_length]t)
+  in
+  unflatten m d res
+
 -- arg_max returns the right most if multiple values
-let arg_max [n] (xs: [n]f32): (i32,f32) =
-    let max ((i1,d1): (i32,f32)) ((i2,d2): (i32,f32)) =
+let arg_max [n] (xs: [n]f32): (i64,f32) =
+    let max ((i1,d1): (i64,f32)) ((i2,d2): (i64,f32)) =
         if d1 > d2 then (i1,d1)
         else if d2 > d1 then (i2,d2)
         else if i1 > i2 then (i1,d1)
         else (i2,d2)
-    in reduce_comm max (i32.lowest,f32.lowest) (zip (iota n) xs)
+    in reduce_comm max (i64.lowest,f32.lowest) (zip ((iota n)) xs)
 
 -- creates flag array with shape defined by shp and values val
 -- r is to specify returned length to handle compiler warnings.
 let mkFlagArray 't [m] 
-            (shp: [m]i32) (zero: t)       
-            (flag_val: t) (r: i32) : [r]t =
+            (shp: [m]i64) (zero: t)       
+            (flag_val: t) (r: i64) : [r]t =
   let shp_ind = scanExc (+) 0 shp
   let vals = replicate m flag_val
   in
@@ -36,14 +46,14 @@ let mkFlagArray 't [m]
 
 -- addded resulting length to handle errors (from lib segmented)
 let segmented_reduce [n] 't (op: t -> t -> t) (ne: t)
-                            (flags: [n]bool) (as: [n]t) (r: i32) : [r]t =
+                            (flags: [n]bool) (as: [n]t) (r: i64) : [r]t =
   -- Compute segmented scan.  Then we just have to fish out the end of
   -- each segment.
   let as' = segmented_scan op ne flags as
   -- Find the segment ends.
   let segment_ends = rotate 1 flags
   -- Find the offset for each segment end.
-  let segment_end_offsets = segment_ends |> map i32.bool |> scan (+) 0
+  let segment_end_offsets = segment_ends |> map i64.bool |> scan (+) 0
   -- Make room for the final result.  The specific value we write here
   -- does not matter; they will all be overwritten by the segment
   -- ends.
@@ -54,11 +64,11 @@ let segmented_reduce [n] 't (op: t -> t -> t) (ne: t)
   in scatter scratch (map2 index segment_end_offsets segment_ends) as'
 
 -- from segmented lib
-let replicated_iota [n] (reps:[n]i32) (r: i32) : [r]i32 =
+let replicated_iota [n] (reps:[n]i64) (r: i64) : [r]i64 =
   let s1 = scan (+) 0 reps
   let s2 = map2 (\i x -> if i==0 then 0 else x)
                 (iota n) (rotate (-1) s1)
-  let tmp = reduce_by_index (replicate r 0) i32.max 0 s2 (iota n)
+  let tmp = reduce_by_index (replicate r 0) i64.max 0 s2 (iota n)
   let flags = map (>0) tmp
   in segmented_scan (+) 0 flags tmp
 
@@ -75,7 +85,7 @@ let get_permute_idxs [n] (conds: [n]bool) : (i32, [n]i32) =
   (i, idxs)
 
 
-
+  
 let calc_new_shape [s] (s1: [s]i32) (s2: [s]i32) : []i32 =
  map2 (\i j -> [j, i-j]) s1 s2 |> flatten
 -- let segmented_partition_idxs [s] (conds: [s]bool) (shp: [s]i32)
