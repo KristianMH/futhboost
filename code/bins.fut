@@ -7,7 +7,7 @@ type binboundaries = (f32, f32) -- min max element in bin
 
 -- assumes vals are sorted!
 -- implement so they upper bounds match xgboost technique? n + (n+1) and 2*n at bound
-let get_bin_bounds [n] (vals: [n]f32) (b: i32) (n_ele: i32) (rest: i32): [b]binboundaries =
+let get_bin_bounds [n] (vals: [n]f32) (b: i64) (n_ele: i64) (rest: i64): [b]binboundaries =
   let bin_sizes = replicate b n_ele
   let lower_bounds_idx = scanExc (+) 0 bin_sizes 
   let upper_bounds_idx = rotate 1 lower_bounds_idx 
@@ -21,8 +21,8 @@ let get_bin_bounds [n] (vals: [n]f32) (b: i32) (n_ele: i32) (rest: i32): [b]binb
 
 -- handle when n < b ?
 -- assumes b > 0
-let binMap [n] (vals: [n]f32) (b: i32) : ([n]i32, [b]binboundaries) =
-  let dest = replicate n 0i32
+let binMap [n] (vals: [n]f32) (b: i64) : ([n]i64, [b]binboundaries) =
+  let dest = replicate n 0i64
   let num_ele_in_bin = n / b
   let rest = n % b
   let (s_vals, s_idx) = radix_sort_float_by_key (.0) f32.num_bits f32.get_bit
@@ -34,37 +34,37 @@ let binMap [n] (vals: [n]f32) (b: i32) : ([n]i32, [b]binboundaries) =
   (scatter dest s_idx bin_vals, bin_bounds)
   -- scatter dest s_idx bin_vals
 
-let a = [10.3f32, 9.32, 4.32, 3.0, 100.3, 304.3]
+--let a = [10.3f32, 9.32, 4.32, 3.0, 100.3, 304.3]
 
 
 -- tests binMap
 -- ==
 -- entry: binMap_test
--- input { [1.1f32, -3.2, 100.3, 20.3, 10.4, 39.2, 304.3, 7.0, -10.3, 3.3] 3}
--- output {[0, 0, 2, 2, 1, 2, 2, 1, 0, 1]}
--- input { [1.0f32, 2.3, 42.1, 249.2, -100.0] 2}
--- output {[0, 1, 1, 1, 0]}
--- input {[10.3f32, 9.32, 4.32, 3.0, 100.3, 304.3] 1}
--- output {[0, 0, 0, 0, 0, 0]}
-entry binMap_test (vals: []f32) (b: i32) =
+-- input { [1.1f32, -3.2, 100.3, 20.3, 10.4, 39.2, 304.3, 7.0, -10.3, 3.3] 3i64}
+-- output {[0i64, 0, 2, 2, 1, 2, 2, 1, 0, 1]}
+-- input { [1.0f32, 2.3, 42.1, 249.2, -100.0] 2i64}
+-- output {[0i64, 1, 1, 1, 0]}
+-- input {[10.3f32, 9.32, 4.32, 3.0, 100.3, 304.3] 1i64}
+-- output {[0i64, 0, 0, 0, 0, 0]}
+entry binMap_test (vals: []f32) (b: i64) =
   (binMap vals b).0
 
 -- ==
 -- entry: binMap_test_lower_bounds
--- input { [1.1f32, -3.2, 100.3, 20.3, 10.4, 39.2, 304.3, 7.0, -10.3, 3.3] 3}
+-- input { [1.1f32, -3.2, 100.3, 20.3, 10.4, 39.2, 304.3, 7.0, -10.3, 3.3] 3i64}
 -- output {[-10.3f32, 3.3, 20.3]}
--- input {[1.0f32, 2.3, 42.1, 249.2, -100.0] 2}
+-- input {[1.0f32, 2.3, 42.1, 249.2, -100.0] 2i64}
 -- output {[-100.0f32, 2.3]}
-entry binMap_test_lower_bounds (vals: []f32) (b: i32) =
+entry binMap_test_lower_bounds (vals: []f32) (b: i64) =
   (binMap vals b).1 |> unzip |> (.0)
 
 -- ==
 -- entry: binMap_test_upper_bounds
--- input { [1.1f32, -3.2, 100.3, 20.3, 10.4, 39.2, 304.3, 7.0, -10.3, 3.3] 3}
+-- input { [1.1f32, -3.2, 100.3, 20.3, 10.4, 39.2, 304.3, 7.0, -10.3, 3.3] 3i64}
 -- output {[1.1f32, 10.4, 304.3]}
--- input {[1.0f32, 2.3, 42.1, 249.2, -100.0] 2}
+-- input {[1.0f32, 2.3, 42.1, 249.2, -100.0] 2i64}
 -- output {[1.0f32, 249.2]}
-entry binMap_test_upper_bounds (vals: []f32) (b: i32) =
+entry binMap_test_upper_bounds (vals: []f32) (b: i64) =
   (binMap vals b).1 |> unzip |> (.1)
 
 
