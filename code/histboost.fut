@@ -19,7 +19,7 @@ let cost (gis: []f32) (his: []f32) (lamda: f32): f32 =
   in
   - gsum**2 / (2.0*(hsum + lamda))
 
-let get_leaf_weight [n][s] (gis: [n]f32) (his: [n]f32) (shp: [s]i32) (l2: f32) (eta: f32)
+let get_leaf_weight [n][s] (gis: [n]f32) (his: [n]f32) (shp: [s]i64) (l2: f32) (eta: f32)
                        : [s]f32 =
   let terminal_flag_arr = mkFlagArray shp false true n
   let gissums = segmented_reduce (+) 0f32 terminal_flag_arr gis s
@@ -34,7 +34,7 @@ let gain (gl: f32) (hl: f32) (g: f32) (h: f32) (l2: f32) (gamma: f32) : (f32, bo
   let hr = h-hl
   in (1/2*(gl**2/(hl+l2)+gr**2/(hr+l2)-g**2/(h+l2)), true)
 
-let getChildren (i: i32): [2]i32 =
+let getChildren (i: i64): [2]i64 =
   [2*i, 2*i+1]
 
 
@@ -57,10 +57,10 @@ let find_split_hist [m] (g_hist: [m]f32) (h_hist: []f32) (bin_bounds: [m]binboun
 
 -- reduce with map2 should be implemented I think- work in progress
 -- input (gain, dim_idx, seg_id)
-let find_best_splits [d][s] (splits: [d][s](f32, i32, i32))
-                             : [s](f32, i32, i32) =
-  let max [s] (d1: [s](f32, i32, i32)) (d2: [s](f32, i32, i32))
-                                       : [s](f32, i32, i32) =
+let find_best_splits [d][s] (splits: [d][s](f32, i64, i64))
+                             : [s](f32, i64, i64) =
+  let max [s] (d1: [s](f32, i64, i64)) (d2: [s](f32, i64, i64))
+                                       : [s](f32, i64, i64) =
     map2 (\x y ->
             let (g1, d1, _) = x
             let (g2, d2, _) = y
@@ -78,7 +78,7 @@ let find_best_splits [d][s] (splits: [d][s](f32, i32, i32))
 let search_splits_segs [d][s][m] (g_hists: [d][s][m]f32) (h_hists: [d][s][m]f32)
                               (g_node: [s]f32) (h_node: [s]f32)
                               (bin_bounds: [d][m]binboundaries) (l2: f32) (gamma: f32)
-                              : [s](i32, f32, bool, bool, node_vals, node_vals) =
+                              : [s](i64, f32, bool, bool, node_vals, node_vals) =
   let best_splits_dim =
     map3 (\seg_g_hist seg_h_hist bin_bound -> -- map over each dim
             map4 (\g_hist h_hist g h -> -- map over each segment
@@ -87,7 +87,7 @@ let search_splits_segs [d][s][m] (g_hists: [d][s][m]f32) (h_hists: [d][s][m]f32)
          ) g_hists h_hists bin_bounds :> [d][s](f32, f32, bool, node_vals, node_vals)
   let (gains, split_vals, missing_dirs, left_nodes, right_nodes) = map unzip5 best_splits_dim |> unzip5
   let dim_mat = map (\i -> replicate s i ) (iota d)
-  let seg_mat = map (\_ -> iota s) (iota d)
+  let seg_mat = replicate d (iota s)
   let best_splits = find_best_splits (map3 zip3 gains dim_mat seg_mat)
   
   -- need to add terminal leaf flag but then done.
@@ -112,18 +112,17 @@ let search_splits_segs [d][s][m] (g_hists: [d][s][m]f32) (h_hists: [d][s][m]f32)
 
 
 -- data layout. [d][n] great for hist calculation but not for partition_lifted
--- perfer [n][d]
-let train_round [n][d][b] (data: [d][n]i32) (bin_bounds: [d][b]binboundaries)
-                             (labels: [n]f32) (preds: [n]f32) (max_depth: i32) 
+-- perfer [n][d] implement transpose
+let train_round [n][d][b] (data: [d][n]i64) (bin_bounds: [d][b]binboundaries)
+                             (labels: [n]f32) (preds: [n]f32) (max_depth: i64) 
                              (l2: f32) (eta: f32) (gamma: f32) = -- : [](i32, f32, bool, bool) =
-  let max_num_nodes = (1 << (max_depth+1)) - 1
-  let tree = replicate max_num_nodes (0,f32.nan, false, false) :> *[](i32, f32, bool, bool)
+  --let max_num_nodes = (1 << (max_depth+1)) - 1
+  let tree = mktree max_depth (0i64,f32.nan, false, false) :> *[](i64, f32, bool, bool)
   let gis = map2 (\p y -> gradient_mse p y) preds labels
   let his = map2 (\p y -> hessian_mse p y) preds labels
-  --let data_x = zip3 (replicate n 1) (iota n) data
   let data_x = data
   -- leaf consist of id, #num_elements and (G, H) sums
-  let root = zip3 [1] [n] [(0.0, 0.0)]
+  let root = zip3 [1i64] [n] [(0.0, 0.0)]
   -- combine active_leafs and shp? most likely
   let (_, res, _, _, _, _) =  --loop gis and his?
   	-- leafs : [l_shp](i32, i32, (f32,f32)) are the leaves on the previous level
@@ -137,16 +136,17 @@ let train_round [n][d][b] (data: [d][n]i32) (bin_bounds: [d][b]binboundaries)
     	let active_points_length = length gis
     	let gis  = (gis  :> [active_points_length]f32)
     	let his  = (his  :> [active_points_length]f32)
-    	let data = (data :> [d][active_points_length]i32)
+    	let data = (data :> [d][active_points_length]i64)
 
     	let l_shp = length leafs
-    	let (shp, active_leafs, GH) = unzip3 (leafs :> [l_shp](i32,i32,(f32,f32))) -- leaf data, shp is num points in each seg
+    	let (shp, active_leafs, GH) = unzip3 (leafs :> [l_shp](i64,i64,(f32,f32)))
+        -- leaf data, shp is num points in each seg
     
     	let (GS, HS) = unzip GH -- parent infomation for each segment
-    	let flag_arr = mkFlagArray shp 0 1 active_points_length
+    	let flag_arr = mkFlagArray shp 0i64 1i64 active_points_length
     	-- seg_offsets are multiplied with #num_bins to fit flat representation of [#segs][b] hists
     	-- flatten unflatten are used or not?
-    	let seg_offsets = scan (+) 0 flag_arr |> map (\x -> (x-1)*b)
+    	let seg_offsets = scan (+) 0i64 flag_arr |> map (\x -> (x-1)*b)
     	let (new_hists_gis, new_hists_his) =
     		(( map (\dim_bins -> 
         	    	let idxs = map2 (+) seg_offsets dim_bins
@@ -161,12 +161,12 @@ let train_round [n][d][b] (data: [d][n]i32) (bin_bounds: [d][b]binboundaries)
 
     	let splits = search_splits_segs new_hists_gis new_hists_his GS HS bin_bounds
                                     l2 gamma
-    	-- splits should be [l_shp](i32, f32, bool, bool, node_vals, node_vals)
+    	-- splits should be [l_shp](i64, f32, bool, bool, node_vals, node_vals)
     	-- (dim_idx, split_val, missing_dir, terminal_flag, left_node, right_node)
-    	let terminal_flag = map (.3) splits |> map (!) -- flip bool
+    	let terminal_flags = map (.3) splits |> map (!) -- flip bool
     	let seg_idxs = scan (+) 0 flag_arr
-    	let cs = map (\i -> terminal_flag[i-1]) seg_idxs
-    	let (seg_i, shps_permute_idxs) = get_permute_idxs terminal_flag
+    	let cs = map (\i -> terminal_flags[i-1]) seg_idxs
+    	let (seg_i, shps_permute_idxs) = get_permute_idxs terminal_flags
     	let (split_i, points_idxs) = get_permute_idxs cs
     	-- (partition out terminal leafs on points)
     	let (active_shp, terminal_shp) = permute shp shps_permute_idxs |> split seg_i
@@ -177,24 +177,27 @@ let train_round [n][d][b] (data: [d][n]i32) (bin_bounds: [d][b]binboundaries)
     	let (gis,his) = unzip act_arrs
     	let (gis', his') = unzip fin_arrs
     	-- permute vs scatter performance?
-    	let leaf_weights = get_leaf_weight gis' his' terminal_shp l2 eta
+        let num_terminal = length terminal_shp
+    	let leaf_weights = get_leaf_weight gis' his' terminal_shp l2 eta --:> [num_terminal]f32
+        let terminal_leafs_idx = permute terminal_leafs (scanExc (+) 0 terminal_shp)
+                                         --:> [num_terminal]i64
     	-- process active_leafs
 
-    
-    	let dims = map (.0) splits
-    	let split_vals = map (.1) splits
-    	let missing_flags = map (.2) splits -- solve dealing with flags
-    	-- then partition_lifted can be used with [s](i32, f32) on data (i.e. do_splits)
+        let (active_splits, _) = permute splits shps_permute_idxs |> split seg_i
+    	-- tree will be updated with scatter -- need to combine for now.
+        let terminal_entries = map (\w ->(0i64,w,false, true)) leaf_weights
+    	let tree1 = scatter tree (map (\t -> t-1) terminal_leafs_idx) terminal_entries
+
+        let active_leaf_idxs = permute active_leafs (scanExc (+) 0 active_shp)
+        let new_nodes = map (\x -> (x.0,x.1,x.2,x.3)) active_splits
+    	let tree2 = scatter tree1 (map (\t -> t-1) active_leaf_idxs) new_nodes
+        
+        -- then partition_lifted can be used with [s](i32, f32) on data (i.e. do_splits)
     	-- new leafs can be calulated from partiton
     	-- should data, gis, his be updated or keep an active_points array
     	-- and then load everything at start of loop?
-
-    	-- tree will be updated with scatter -- need to combine for now.
-    	let tree1 = scatter tree (map (\t -> t-1) terminal_leafs) (map (\w ->(0i32,w,false, true)) leaf_weights)
-    	let tree2 = scatter tree1 (map (\t -> t-1) active_leafs)
-                        (filter (\t -> !t.3) (zip4 dims split_vals missing_flags terminal_flags))
-    
-    	let (data, shape) = partiton_lifted (zip dims split_vals) < active_shp data
+        let conds = map (\x -> (x.0, x.1)) active_splits
+    	let (data, shape) = partition_lifted  conds (0i64) (<) active_shp data
     	let new_shp = calc_new_shape active_shp shape
     	let active_leafs = map getChildren active_leafs |> flatten
     	let left_nodes = map (.4) splits

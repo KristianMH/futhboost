@@ -10,8 +10,10 @@ let scanExc 't [n] (op: t->t->t) (ne: t) (arr : [n]t) : [n]t =
 let log2 x = (loop (y,c) = (x,0i32) while y > 1i32 do (y >> 1, c+1)).1
 
 -- permutes array
-let permute [n][m] 't (xs: [n]t) (idxs: [m]i32): [m]t =
+let permute [n][m] 't (xs: [n]t) (idxs: [m]i64): [m]t =
   map (\i -> xs[i]) idxs
+
+
 -- operator applied elementwise on tuple of length 2
 let tuple_math 't (op: t -> t-> t)(n1: (t,t)) (n2: (t,t)) = (op n1.0 n2.0, op n1.1 n2.1)
 
@@ -74,8 +76,8 @@ let replicated_iota [n] (reps:[n]i64) (r: i64) : [r]i64 =
 
 
 
-let get_permute_idxs [n] (conds: [n]bool) : (i32, [n]i32) =
-  let true_flags = map i32.bool conds
+let get_permute_idxs [n] (conds: [n]bool) : (i64, [n]i64) =
+  let true_flags = map i64.bool conds
   let true_idxs = scan (+) 0 true_flags
   let false_flags = map (\t -> 1-t) true_flags
   let i =  last true_idxs
