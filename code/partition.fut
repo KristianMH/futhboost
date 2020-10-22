@@ -16,7 +16,7 @@ let partition_lifted [n][l][d] 't (conds: [l](i64, t)) (ne: t) (op: t -> t -> bo
   let false_offsets = segmented_scan (+) 0 bool_flag_arr false_ints
   let seg_offsets = scanExc (+) 0 shp
   let num_true_in_segs = segmented_reduce (+) 0 bool_flag_arr true_ints l
-  let num_false_in_segs = map2 (-) shp num_true_in_segs
+  --let num_false_in_segs = map2 (-) shp num_true_in_segs
   let true_val_offsets = map2 (\x i -> x + seg_offsets[i]) true_offsets seg_offsets_idx
   let false_val_offsets = map2 (\x i -> x + seg_offsets[i] + num_true_in_segs[i])
                                false_offsets seg_offsets_idx

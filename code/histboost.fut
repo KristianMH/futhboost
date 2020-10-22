@@ -32,7 +32,7 @@ let get_leaf_weight [n][s] (gis: [n]f32) (his: [n]f32) (shp: [s]i64) (l2: f32) (
 let gain (gl: f32) (hl: f32) (g: f32) (h: f32) (l2: f32) (gamma: f32) : (f32, bool) =
   let gr = g-gl
   let hr = h-hl
-  in (1/2*(gl**2/(hl+l2)+gr**2/(hr+l2)-g**2/(h+l2)), true)
+  in (1/2*(gl**2/(hl+l2)+gr**2/(hr+l2)-g**2/(h+l2) -gamma), true)
 
 let getChildren (i: i64): [2]i64 =
   [2*i, 2*i+1]
@@ -41,18 +41,18 @@ let getChildren (i: i64): [2]i64 =
 
 -- find the best split within a dimension
 -- returns (gain, split_val, missing_dir, node_left, node_right)
-let find_split_hist [m] (g_hist: [m]f32) (h_hist: []f32) (bin_bounds: [m]binboundaries)
+let find_split_hist [m] (g_hist: [m]f32) (h_hist: []f32) --(bin_bounds: [m]binboundaries)
                         (g: f32) (h: f32) (l2: f32) (gamma: f32)
-                        : (f32, f32, bool, node_vals, node_vals) =
+                        : (f32, i64, bool, node_vals, node_vals) =
   let gls = scan (+) 0.0 g_hist
   let hls = scan (+) 0.0 h_hist
   let gains = map2 (\gl hl -> gain gl hl g h l2 gamma) gls hls
   let (gains, flags) = unzip gains
   let (best_split_idx, best_gain) = arg_max gains
-  let split_val = bin_bounds[best_split_idx] |> (.1) -- max. or min?
+  --let split_val = bin_bounds[best_split_idx] |> (.1) -- max. or min?
   let node_left = (gls[best_split_idx], hls[best_split_idx])
   let node_right = tuple_math (-) (g,h) node_left
-  in (best_gain, split_val, flags[best_split_idx], node_left, node_right)
+  in (best_gain, best_split_idx, flags[best_split_idx], node_left, node_right)
 
 
 -- reduce with map2 should be implemented I think- work in progress
@@ -77,14 +77,16 @@ let find_best_splits [d][s] (splits: [d][s](f32, i64, i64))
 -- returns (dim_idx, split_val, is_leaf?, missing_dir, node_left, node_right)
 let search_splits_segs [d][s][m] (g_hists: [d][s][m]f32) (h_hists: [d][s][m]f32)
                               (g_node: [s]f32) (h_node: [s]f32)
-                              (bin_bounds: [d][m]binboundaries) (l2: f32) (gamma: f32)
-                              : [s](i64, f32, bool, bool, node_vals, node_vals) =
+                              --(bin_bounds: [d][m]binboundaries)
+                              (l2: f32) (gamma: f32)
+                              : [s](i64, i64, bool, bool, node_vals, node_vals) =
   let best_splits_dim =
-    map3 (\seg_g_hist seg_h_hist bin_bound -> -- map over each dim
+    map2 (\seg_g_hist seg_h_hist -> --bin_bound -> -- map over each dim
             map4 (\g_hist h_hist g h -> -- map over each segment
-                    find_split_hist g_hist h_hist bin_bound g h l2 gamma)
+                    find_split_hist g_hist h_hist --bin_bound g h l2 gamma)
+                                    g h l2 gamma)
                  seg_g_hist seg_h_hist g_node h_node 
-         ) g_hists h_hists bin_bounds :> [d][s](f32, f32, bool, node_vals, node_vals)
+         ) g_hists h_hists :> [d][s](f32, i64, bool, node_vals, node_vals)--bin_bounds 
   let (gains, split_vals, missing_dirs, left_nodes, right_nodes) = map unzip5 best_splits_dim |> unzip5
   let dim_mat = map (\i -> replicate s i ) (iota d)
   let seg_mat = replicate d (iota s)
@@ -100,7 +102,7 @@ let search_splits_segs [d][s][m] (g_hists: [d][s][m]f32) (h_hists: [d][s][m]f32)
          let right_node = right_nodes[dim_id, seg_id]
          in (dim_id, split_val, missing_dir, false, left_node, right_node)
          else
-           (0, 0.0, false, true, (0.0, 0.0), (0.0, 0.0))) best_splits
+           (0, 0i64, false, true, (0.0, 0.0), (0.0, 0.0))) best_splits
 
 
 
@@ -113,9 +115,9 @@ let search_splits_segs [d][s][m] (g_hists: [d][s][m]f32) (h_hists: [d][s][m]f32)
 
 -- data layout. [d][n] great for hist calculation but not for partition_lifted
 -- perfer [n][d] implement transpose
-let train_round [n][d][b] (data: [d][n]i64) (bin_bounds: [d][b]binboundaries)
+let train_round [n][d][b] (data: [n][d]i64) (bin_bounds: [d][b]binboundaries)
                              (labels: [n]f32) (preds: [n]f32) (max_depth: i64) 
-                             (l2: f32) (eta: f32) (gamma: f32) = -- : [](i32, f32, bool, bool) =
+                             (l2: f32) (eta: f32) (gamma: f32) : [](i64, f32, bool, bool) =
   --let max_num_nodes = (1 << (max_depth+1)) - 1
   let tree = mktree max_depth (0i64,f32.nan, false, false) :> *[](i64, f32, bool, bool)
   let gis = map2 (\p y -> gradient_mse p y) preds labels
@@ -136,10 +138,10 @@ let train_round [n][d][b] (data: [d][n]i64) (bin_bounds: [d][b]binboundaries)
     	let active_points_length = length gis
     	let gis  = (gis  :> [active_points_length]f32)
     	let his  = (his  :> [active_points_length]f32)
-    	let data = (data :> [d][active_points_length]i64)
+    	let data = (data :> [active_points_length][d]i64)
 
     	let l_shp = length leafs
-    	let (shp, active_leafs, GH) = unzip3 (leafs :> [l_shp](i64,i64,(f32,f32)))
+    	let (active_leafs, shp, GH) = unzip3 (leafs :> [l_shp](i64,i64,(f32,f32)))
         -- leaf data, shp is num points in each seg
     
     	let (GS, HS) = unzip GH -- parent infomation for each segment
@@ -157,10 +159,10 @@ let train_round [n][d][b] (data: [d][n]i64) (bin_bounds: [d][b]binboundaries)
                     in  ( unflatten l_shp b g_seg_hist
                         , unflatten l_shp b h_seg_hist
                         )
-                ) data ) :> [d]( [l_shp][b]f32, [l_shp][b]f32 ) ) |> unzip
+                ) (transpose data) ) :> [d]( [l_shp][b]f32, [l_shp][b]f32 ) ) |> unzip
 
-    	let splits = search_splits_segs new_hists_gis new_hists_his GS HS bin_bounds
-                                    l2 gamma
+    	let splits = search_splits_segs new_hists_gis new_hists_his GS HS --bin_bounds
+                                    l2 gamma --|> trace
     	-- splits should be [l_shp](i64, f32, bool, bool, node_vals, node_vals)
     	-- (dim_idx, split_val, missing_dir, terminal_flag, left_node, right_node)
     	let terminal_flags = map (.3) splits |> map (!) -- flip bool
@@ -177,7 +179,7 @@ let train_round [n][d][b] (data: [d][n]i64) (bin_bounds: [d][b]binboundaries)
     	let (gis,his) = unzip act_arrs
     	let (gis', his') = unzip fin_arrs
     	-- permute vs scatter performance?
-        let num_terminal = length terminal_shp
+        --let num_terminal = length terminal_shp
     	let leaf_weights = get_leaf_weight gis' his' terminal_shp l2 eta --:> [num_terminal]f32
         let terminal_leafs_idx = permute terminal_leafs (scanExc (+) 0 terminal_shp)
                                          --:> [num_terminal]i64
@@ -185,12 +187,13 @@ let train_round [n][d][b] (data: [d][n]i64) (bin_bounds: [d][b]binboundaries)
 
         let (active_splits, _) = permute splits shps_permute_idxs |> split seg_i
     	-- tree will be updated with scatter -- need to combine for now.
-        let terminal_entries = map (\w ->(0i64,w,false, true)) leaf_weights
+        let terminal_entries = map (\w ->(0i64, w, false, true)) leaf_weights
     	let tree1 = scatter tree (map (\t -> t-1) terminal_leafs_idx) terminal_entries
 
         let active_leaf_idxs = permute active_leafs (scanExc (+) 0 active_shp)
-        let new_nodes = map (\x -> (x.0,x.1,x.2,x.3)) active_splits
-    	let tree2 = scatter tree1 (map (\t -> t-1) active_leaf_idxs) new_nodes
+        let new_nodes = map (\x -> let split_val = bin_bounds[x.0,x.1] |> (.1)
+                                   in  (x.0, split_val, x.2, x.3)) active_splits
+    	let tree2 = scatter tree1 (map (\t -> t-1) active_leaf_idxs) new_nodes --|> trace
         
         -- then partition_lifted can be used with [s](i32, f32) on data (i.e. do_splits)
     	-- new leafs can be calulated from partiton
@@ -198,11 +201,12 @@ let train_round [n][d][b] (data: [d][n]i64) (bin_bounds: [d][b]binboundaries)
     	-- and then load everything at start of loop?
         let conds = map (\x -> (x.0, x.1)) active_splits
     	let (data, shape) = partition_lifted  conds (0i64) (<) active_shp data
-    	let new_shp = calc_new_shape active_shp shape
-    	let active_leafs = map getChildren active_leafs |> flatten
-    	let left_nodes = map (.4) splits
-    	let right_nodes = map (.5) splits
-    	let GH = map2 (\ln rn -> [ln, rn]) left_nodes right_nodes |> flatten
+        let new_length = 2*length active_shp
+   	let new_shp = calc_new_shape active_shp shape :> [new_length]i64
+    	let active_leafs = map getChildren active_leafs |> flatten :> [new_length]i64
+    	let left_nodes = map (.4) active_splits
+    	let right_nodes = map (.5) active_splits
+    	let GH = map2 (\ln rn -> [ln, rn]) left_nodes right_nodes |> flatten :> [new_length](f32,f32)
     	let leafs = zip3 new_shp active_leafs GH
     	in
     		(leafs, tree2, i+1, data, gis, his)
@@ -213,22 +217,25 @@ let train_round [n][d][b] (data: [d][n]i64) (bin_bounds: [d][b]binboundaries)
 
 let error (label: f32) (pred: f32) : f32 = (label-pred)**2
 
--- let train [n][d] (data: [n][d]f32) (labels: [n]f32) (max_depth: i32) (n_rounds: i32)
---                        (l2: f32) (eta: f32) (gamma: f32) : f32 =
---   let inital_preds = replicate n 0.5
---   let res =
---     loop (data, labels, preds, e) = (data, labels, inital_preds, 0) for i < n_rounds do
---       let tree  = train_round_v2 data labels preds max_depth l2 eta gamma
---       --:[](i32, f32, bool, bool)
---       let new_preds = map (\x -> predict x tree) data |> map2 (+) preds 
---       let train_error = reduce (+) 0.0 <| map2 (\l p -> error l p) labels new_preds
---       let train_error = f32.sqrt (train_error/ (f32.i32 n))
---       --let ha = trace train_error
---       in
---       (data, labels, new_preds, train_error)
---   in
---   res.3
+let train [n][d] (data: [n][d]f32) (labels: [n]f32) (max_depth: i64) (n_rounds: i32)
+                       (l2: f32) (eta: f32) (gamma: f32) : f32 =
+  let inital_preds = replicate n 0.5
+  let (data_b, bin_bounds) = map (\r -> binMap r 5i64) (transpose data) |> unzip
+  let data_b = transpose data_b 
+  let res =
+    loop (data, labels, preds, e) = (data, labels, inital_preds, 0) for i < n_rounds do
+      let tree  = train_round data_b bin_bounds labels preds max_depth l2 eta gamma
+                  --:> [](i64, f32, bool, bool)
+      let new_preds = map (\x -> predict x tree) data |> map2 (+) preds 
+      let train_error = reduce (+) 0.0 <| map2 (\l p -> error l p) labels new_preds
+      let train_error = f32.sqrt (train_error/ (f32.i64 n)) |> trace
+      --let ha = trace train_error
+      in
+      (data, labels, new_preds, train_error)
+  in
+  res.3
           
--- let eval = train data[:,:2] data[:,2] 3 3 0.5 0.3 0
+let eval = train data[:,:2] data[:,2] 3 3 0.5 0.3 0
              
 --let main (xs: [][]f32) = let res = train xs[:,:2] xs[:,2] in res[0].1
+let main = eval
