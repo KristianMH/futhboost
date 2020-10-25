@@ -24,7 +24,9 @@ let get_leaf_weight [n][s] (gis: [n]f32) (his: [n]f32) (shp: [s]i64) (l2: f32) (
                        : [s]f32 =
   let terminal_flag_arr = mkFlagArray shp false true n
   let gissums = segmented_reduce (+) 0f32 terminal_flag_arr gis s
+  --let ha = trace gissums
   let hissums = segmented_reduce (+) 0f32 terminal_flag_arr his s
+  --let ha = trace hissums
   in
   map2 (\gs hs -> eta*(-gs/(hs+l2))) gissums hissums
        --eta*(-gsum/(hsum + l2))-- + min_weight
@@ -98,7 +100,7 @@ let search_splits_segs [d][s][m] (g_hists: [d][s][m]f32) (h_hists: [d][s][m]f32)
   --let ha = trace gains
   let dim_mat = map (\i -> replicate s i ) (iota d)
   let seg_mat = replicate d (iota s)
-  let best_splits = find_best_splits (map3 zip3 gains dim_mat seg_mat) --|> trace
+  let best_splits = find_best_splits (map3 zip3 gains dim_mat seg_mat) |> trace
   
   -- need to add terminal leaf flag but then done.
   in
@@ -141,7 +143,7 @@ let train_round [n][d][b] (data: [n][d]i64) (bin_bounds: [d][b]binboundaries)
   	-- gis, his : [active_points_length]f32
     loop (leafs, tree, i, data, gis, his) = -- need active_point_idxs?
       (root, tree, 0, data, gis, his)
-      while (i < max_depth) && !(null leafs) do
+      while (i <= max_depth) && !(null leafs) do
     	let active_points_length = length gis
     	let gis  = (gis  :> [active_points_length]f32)
     	let his  = (his  :> [active_points_length]f32)
@@ -168,7 +170,7 @@ let train_round [n][d][b] (data: [n][d]i64) (bin_bounds: [d][b]binboundaries)
                             )
                 ) (transpose data) ) :> [d]( [l_shp][b]f32, [l_shp][b]f32 ) ) |> unzip
         --let ha = trace new_hists_gis
-        let last_level = i == (max_depth-1)
+        let last_level = i == (max_depth) -- if statement?
     	let splits = search_splits_segs new_hists_gis new_hists_his GS HS --bin_bounds
                                         l2 gamma last_level --|> trace
         --let ha = trace splits
@@ -181,8 +183,8 @@ let train_round [n][d][b] (data: [n][d]i64) (bin_bounds: [d][b]binboundaries)
         let (seg_i, shps_permute_idxs) = get_permute_idxs terminal_flags --|> trace
     	let (split_i, points_idxs) = get_permute_idxs cs
     	-- (partition out terminal leafs on points)
-    	let (active_shp, terminal_shp) = permute shp shps_permute_idxs |> split seg_i
-    	let (active_leafs, terminal_leafs) = permute active_leafs shps_permute_idxs |> split seg_i
+    	let (active_shp, terminal_shp) = permute shp shps_permute_idxs |> split seg_i --|> trace
+    	let (active_leafs, terminal_leafs) = permute active_leafs shps_permute_idxs |> split seg_i --|> trace
     	-- leaf_idxs! match terminal leafs and active leafs for scatter.
     	let (data, _) = permute data points_idxs |> split split_i
     	let (act_arrs, fin_arrs) = permute (zip gis his) points_idxs |> split split_i
@@ -208,7 +210,7 @@ let train_round [n][d][b] (data: [n][d]i64) (bin_bounds: [d][b]binboundaries)
         -- let ho = trace active_leafs
         -- let ha = trace (scanExc (+) 0 active_shp)
         --let active_leaf_idxs = permute active_leafs ha
-        let new_nodes = map (\x -> let split_val = bin_bounds[x.0, x.1] |> (.1)
+        let new_nodes = map (\x -> let split_val = bin_bounds[x.0, x.1] |> (.1) -- max val for bounds
                                    in  (x.0, split_val, x.2, x.3)) active_splits
     	let tree2 = scatter tree1 (map (\t -> t-1) active_leafs) new_nodes --|> trace
         
@@ -216,10 +218,21 @@ let train_round [n][d][b] (data: [n][d]i64) (bin_bounds: [d][b]binboundaries)
     	-- new leafs can be calulated from partiton
     	-- should data, gis, his be updated or keep an active_points array
     	-- and then load everything at start of loop?
-        let conds = map (\x -> (x.0, x.1)) active_splits
-    	let (data, shape) = partition_lifted  conds (0i64) (<) active_shp data
+        let conds = map (\x -> (x.0, x.1)) active_splits --|> trace
+    	let (idxs, shape, test) = partition_lifted_idx  conds (0i64) (<=) active_shp data
+        let he = trace shape
+        let ha = map2 (\x c -> if c then x else 0) gis test |> reduce (+) 0 |> trace
+        let he = map2 (\x c -> if !c then x else 0) gis test |> reduce (+) 0 |> trace
+        -- let ha = trace (ha + he)
+        -- let ho = trace (reduce (+) 0 (map i32.bool test))
+        -- let ha = trace shape
+        let data = scatter2D (replicate n (replicate d 0i64)) idxs data
+        let gis = scatter (replicate (length gis) 0.0) idxs gis
+        --let wow = trace (reduce (+) 0 gis[:shape[0]])
+        let his = scatter (replicate (length gis) 0.0) idxs his
         let new_length = 2*length active_shp
    	let new_shp = calc_new_shape active_shp shape :> [new_length]i64
+        --let he = trace new_shp
     	let active_leafs = map getChildren active_leafs |> flatten :> [new_length]i64
     	let left_nodes = map (.4) active_splits
     	let right_nodes = map (.5) active_splits
@@ -242,7 +255,7 @@ let train [n][d] (data: [n][d]f32) (labels: [n]f32) (max_depth: i64) (n_rounds: 
   let results = replicate n_rounds 0.0f32
   let res =
     loop (data, labels, preds, e) = (data, labels, inital_preds, results) for i < n_rounds do
-      let tree  = train_round data_b bin_bounds labels preds max_depth l2 eta gamma --|> trace
+      let tree  = train_round data_b bin_bounds labels preds max_depth l2 eta gamma |> trace
                   --:> [](i64, f32, bool, bool)
       let new_preds = map (\x -> predict x tree) data |> map2 (+) preds 
       let train_error = reduce (+) 0.0 <| map2 (\l p -> error l p) labels new_preds
@@ -257,6 +270,6 @@ let train [n][d] (data: [n][d]f32) (labels: [n]f32) (max_depth: i64) (n_rounds: 
 --let eval = train data[:,:2] data[:,2] 3 3 0.5 0.3 0
              
 --let main (xs: [][]f32) = let res = train xs[:,:2] xs[:,2] in res[0].1
-let main [n][d] (data: [n][d]f32) (labels: [n]f32) = train data labels 10 100 0.5 0.3 0
+let main [n][d] (data: [n][d]f32) (labels: [n]f32) = train data labels 10 10 0.5 0.1 0
 
-let test = train woopdata wooptarget 3 10 0.5 0.3 0
+let test = train woopdata wooptarget 2 2 0.5 0.3 0

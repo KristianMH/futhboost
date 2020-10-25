@@ -9,7 +9,7 @@ data = d.data.astype("float32")
 target = d.target.astype("float32")
 xgboostdatat = xgb.DMatrix(data, label=target)
 xgboostdata = xgb.DMatrix(data, label=target)
-param = {"objective":"reg:squarederror", "max_depth":10, "eta":0.3, "reg_lambda":0.5,
+param = {"objective":"reg:squarederror", "max_depth":3, "eta":0.3, "reg_lambda":0.5,
          "tree_method":"gpu_hist", "max_bin":10}
 num_round=100
 #progress = dict()
@@ -17,13 +17,17 @@ watchlist  = [(xgboostdatat, "val-rmse"), (xgboostdata,'train-rmse')]
 bst = xgb.train(param, xgboostdata, num_round, watchlist)
 #print(xgboostdata.feature_names)
 #print(bst.get_split_value_histogram("f8"))
+#print(bst.get_score())
 #ha = xgb.Booster(param)
 #print(ha.boost(xgboostdata, ))
 #print(bst.predict(trai))
 #print(progress)
 #print(bst.get_dump())
 #for i in range(num_round):
-#    xgb.plot_tree(bst, num_trees=i)
-#    plt.show()
+#   xgb.plot_tree(bst, num_trees=i)
+#   plt.show()
     #bst.dump_model("model.b")
     #bst.tree()
+#ha = data[:, 8] < -3.304e-3
+#print(ha)
+#print(ha.sum())
