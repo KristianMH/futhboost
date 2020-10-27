@@ -10,12 +10,23 @@ type binboundaries = (f32, f32) -- min max element in bin
 let get_bin_bounds [n] (vals: [n]f32) (b: i64) (n_ele: i64) (rest: i64): [b]binboundaries =
   let bin_sizes = replicate b n_ele
   let lower_bounds_idx = scanExc (+) 0 bin_sizes 
-  let upper_bounds_idx = rotate 1 lower_bounds_idx 
-  let upper_bounds_idx = map2 (\l u -> if u <= l then
-                                         l+n_ele+rest-1 else -- fix for last bin or single_bin
-                                         u-1) lower_bounds_idx upper_bounds_idx
+  -- let upper_bounds_idx = rotate 1 lower_bounds_idx 
+  -- let upper_bounds_idx = map2 (\l u -> if u <= l then
+  --                                        l+n_ele+rest-1 else -- fix for last bin or single_bin
+  --                                        u-1) lower_bounds_idx upper_bounds_idx
+  let lower_bounds = map (\i -> vals[i]) lower_bounds_idx
+  let upper_bounds_idx = rotate 1 lower_bounds_idx
+  let upper_bounds = map (\i -> if i==0 then
+                                   vals[n-1]*2
+                                 else
+                                   ((vals[i-1]+vals[i-1])/2.0)) upper_bounds_idx
   in
-  map2 (\l u-> (vals[l], vals[u])) (lower_bounds_idx) (upper_bounds_idx)
+  zip lower_bounds upper_bounds
+  --map2 (\l u-> (vals[l], vals[u])) (lower_bounds_idx) (upper_bounds_idx)
+  -- map2 (\l u-> if u == (n-1) then
+  --         (vals[l], vals[u]*2.0)
+  --       else
+  --         (vals[l], (vals[u]+vals[u+1])/2.0)) (lower_bounds_idx) (upper_bounds_idx)
   -- faster with map map zip?
 
 

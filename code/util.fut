@@ -10,11 +10,11 @@ let scanExc 't [n] (op: t->t->t) (ne: t) (arr : [n]t) : [n]t =
 let log2 x = (loop (y,c) = (x,0i32) while y > 1i32 do (y >> 1, c+1)).1
 
 -- permutes array
-let permute [n][m] 't (xs: [n]t) (idxs: [m]i64): [m]t =
+let permute [n][m] 't (xs: [n]t) (idxs: [m]i64): *[m]t =
   map (\i -> xs[i]) idxs
 
-let gather2D 't [m][d] (arr2D: [m][d]t) (inds: [m]i64) : *[m][d]t =
-  map (\ind -> map (\j -> arr2D[ind,j]) (iota d) ) inds
+let permute2D 't [m][d] (arr: [m][d]t) (inds: [m]i64) : *[m][d]t =
+  map (\ind -> map (\j -> arr[ind,j]) (iota d) ) inds
       
 -- operator applied elementwise on tuple of length 2
 let tuple_math 't (op: t -> t-> t)(n1: (t,t)) (n2: (t,t)) = (op n1.0 n2.0, op n1.1 n2.1)

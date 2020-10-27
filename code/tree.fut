@@ -7,7 +7,7 @@ let leftchild 't (i: i64) (tree: []t): (i64, t) =
 let parent 't (i: i64) (tree: []t): (i64, t) =
   (i/2, tree[i/2])
 
-let mktree 't (d: i64) (x: t): []t =
+let mktree 't (d: i64) (x: t): *[]t =
   let max_num_nodes = (1 << (d+1)) - 1
   in
   replicate max_num_nodes x
