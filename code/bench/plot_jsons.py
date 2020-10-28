@@ -55,10 +55,10 @@ ms_par = ms_par[sortedidxs]
 fig, ax = plt.subplots()
 ax.plot(sizes, ms_par, color="blue", label="openCL")
 ax.plot(sizes, ms_seq, color="red", label="cuda")
-ax.set_xscale("log")
+ax.set_xscale("log", base=10)#2)
 ax.set_xlabel("Size of input")
 ax.set_ylabel("Runtime(ms)")
 ax.set_title(seq +" vs "+ par)
 
 ax.legend()
-plt.savefig("bins_bench.png")
+plt.savefig("partition_bench_segs.png")

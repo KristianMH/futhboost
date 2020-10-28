@@ -56,9 +56,9 @@ num = 10**6 #number of elements
 prefix = "seg"
 for seg in SEGS:
     str_size = matsize_to_str(num, size)
-    name = path_name(path, prefix, num, seg)
+    name = path_name(path, prefix, seg, num)
     # #print(file_name(prefix, num, size) not in datasets)
-    if file_name(prefix, num, seg) not in datasets:
+    if file_name(prefix, seg, num) not in datasets:
         #print("writing: "+name)
         #data = np.random.rand(num,size).astype("float32")
         #print(data.shape, data.dtype)
