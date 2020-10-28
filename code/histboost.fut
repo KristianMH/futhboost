@@ -303,7 +303,7 @@ let train [n][d] (data: [n][d]f32) (labels: [n]f32) (max_depth: i64) (n_rounds: 
 --let eval = train data[:,:2] data[:,2] 3 3 0.5 0.3 0
              
 --let main (xs: [][]f32) = let res = train xs[:,:2] xs[:,2] in res[0].1
-let main [n][d] (data: [n][d]f32) (labels: [n]f32) = train data labels 2 100 0.5 0.3 0
+let main [n][d] (data: [n][d]f32) (labels: [n]f32) = train data labels 15 2 0.5 0.3 0
 
 let test = train woopdata wooptarget 3 1 0.5 0.3 0
 --let data_test = train data_test[:,:2] data_test[:,2] 3 1 0.5 0.3 0
