@@ -236,21 +236,12 @@ let train_round [n][d][b] (data_f: [n][d]f32) (data_b: [n][d]i64) (bin_bounds: [
     	    -- new leafs can be calulated from partiton
     	    -- should data, gis, his be updated or keep an active_points array
     	    -- and then load everything at start of loop?
-            let conds = map (\x -> (x.0, x.1+1)) active_splits --|> trace
-            -- let conds = map (\x ->
-            --                    let (dim_id, bin_id) = (x.0, x.1)
-            --                    let split_val = if bin_id == (b-1) then
-            --                                      bin_bounds[dim_id, bin_id] |> (.1)
-            --                                    else
-            --                                      bin_bounds[dim_id, bin_id+1] |> (.0)
-            --                    in
-            --                      (dim_id, split_val)
-            --                 ) active_splits
-            --let conds = map (\x -> (x.0, x.1)) new_nodes
-    	    let (idxs, shape, test) = partition_lifted_idx  conds (0) (<) active_shp data_b
-            --let he = trace shape
-            --let ha = map2 (\x c -> if c then x else 0) gis test |> reduce (+) 0 |> trace
-            --let he = map2 (\x c -> if !c then x else 0) gis test |> reduce (+) 0 |> trace
+            --let conds = map (\x -> (x.0, x.1+1)) active_splits --|> trace
+            let conds = map (\x -> (x.0, x.1)) new_nodes
+    	    let (idxs, shape, test) = partition_lifted_idx  conds (0.0) (<) active_shp data_f
+            -- let he = trace shape
+            -- let ha = map2 (\x c -> if c then x else 0) gis test |> reduce (+) 0 |> trace
+            -- let he = map2 (\x c -> if !c then x else 0) gis test |> reduce (+) 0 |> trace
             -- let ha = trace (ha + he)
             -- let ho = trace (reduce (+) 0 (map i32.bool test))
             -- let ha = trace shape
@@ -303,7 +294,7 @@ let train [n][d] (data: [n][d]f32) (labels: [n]f32) (max_depth: i64) (n_rounds: 
 --let eval = train data[:,:2] data[:,2] 3 3 0.5 0.3 0
              
 --let main (xs: [][]f32) = let res = train xs[:,:2] xs[:,2] in res[0].1
-let main [n][d] (data: [n][d]f32) (labels: [n]f32) = train data labels 15 2 0.5 0.3 0
+let main [n][d] (data: [n][d]f32) (labels: [n]f32) = train data labels 3 100 0.5 0.3 0
 
 let test = train woopdata wooptarget 3 1 0.5 0.3 0
 --let data_test = train data_test[:,:2] data_test[:,2] 3 1 0.5 0.3 0
