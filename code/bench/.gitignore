@@ -1,0 +1,16 @@
+# Ignore all
+*
+
+# Unignore all with extensions
+!*.*
+
+# Unignore all dirs
+!*/
+
+!Makefile
+*.c
+#lib/
+bin_bench_data/
+partition_bench_data/
+*.actual
+*.expected
