@@ -54,3 +54,12 @@ partition_test: partition_data partition_test.fut
 # 		      --entry=num_partition \
 # 		      --json jsons/partition_bench_opencl.json -r10 \
 # 		      partition_bench.fut
+all:clean
+
+clean:
+	find . -maxdepth 1 -type f -executable -exec rm '{}' \;
+	rm *.c
+
+clean_tests:
+	rm *.actual
+	rm *.expected

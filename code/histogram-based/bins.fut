@@ -1,6 +1,6 @@
-import "lib/github.com/diku-dk/sorts/radix_sort"
-import "lib/github.com/diku-dk/segmented/segmented"
-import "util"
+import "../lib/github.com/diku-dk/sorts/radix_sort"
+import "../lib/github.com/diku-dk/segmented/segmented"
+import "../util"
 
 type binboundaries = (f32, f32) -- min max element in bin
 
@@ -32,14 +32,15 @@ let get_bin_bounds [n] (vals: [n]f32) (b: i64) (n_ele: i64) (rest: i64): [b]binb
 
 -- handle when n < b ?
 -- assumes b > 0
-let binMap [n] (vals: [n]f32) (b: i64) : ([n]i64, [b]binboundaries) =
-  let dest = replicate n 0i64
+let binMap [n] (vals: [n]f32) (b: i64) : ([n]u16, [b]binboundaries) =
+  let dest = replicate n 0u16
   let num_ele_in_bin = n / b
   let rest = n % b
+  let index_arr = iota n --|> map u16.i64
   let (s_vals, s_idx) = radix_sort_float_by_key (.0) f32.num_bits f32.get_bit
-                                       ( zip vals (iota n)) |> unzip
+                                       ( zip vals index_arr) |> unzip
   let val_shape = replicate b num_ele_in_bin with [b-1] = num_ele_in_bin + rest
-  let bin_vals = replicated_iota val_shape n -- should be changed to support other idxs?
+  let bin_vals = replicated_iota val_shape n |> map u16.i64
   let bin_bounds = get_bin_bounds s_vals b num_ele_in_bin rest
   in
   (scatter dest s_idx bin_vals, bin_bounds)

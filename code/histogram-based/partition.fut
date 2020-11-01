@@ -1,5 +1,5 @@
-import "lib/github.com/diku-dk/segmented/segmented"
-import "util"
+import "../lib/github.com/diku-dk/segmented/segmented"
+import "../util"
 
 -- -- -- perserves shape, assumes vals non-empty otherwise pass ne?
 -- -- operator: val[i] < limit
