@@ -30,7 +30,7 @@ let scatter2D [m][d][n] 't (arr2D: *[m][d]t) (inds: [n]i64) (vals2D: [n][d]t): *
   unflatten m d res
 
   -- can be smarter!
-let getChildren (i: i32): [2]i32 =
+let getChildren (i: i64): [2]i64 =
   [2*i, 2*i+1]
 
 -- arg_max returns the right most if multiple values
