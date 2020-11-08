@@ -4,6 +4,9 @@ bins_data:
 partition_data:
 	python gen_partition_data.py
 
+histogram_data:
+	python gen_histogram_data.py
+
 bins_bench_c: bins_data bins_bench.fut
 	futhark bench --backend=c \
                       --json jsons/bins_bench_c.json -r10 \
@@ -59,6 +62,7 @@ all:clean
 clean:
 	find . -maxdepth 1 -type f -executable -exec rm '{}' \;
 	rm *.c
+	rm -rf partition_bench_data bins_bench_data histogram_bench_data
 
 clean_tests:
 	rm *.actual

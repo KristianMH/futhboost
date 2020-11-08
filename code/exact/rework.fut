@@ -2,7 +2,7 @@ import "../lib/github.com/diku-dk/sorts/radix_sort"
 import "../util"
 import "../tree"
 import "../objective"
-import "../histogram-based/partition"
+import "../partition"
 import "woop"
 
 

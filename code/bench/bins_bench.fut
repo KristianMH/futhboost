@@ -1,4 +1,4 @@
-import "../bins"
+import "../histogram-based/bins"
 
 -- input @ bins_bench_data/bench_100
 
