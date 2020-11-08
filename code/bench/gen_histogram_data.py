@@ -53,3 +53,29 @@ for (num, size) in zip(NS, SEGS):
         futhark_data.dump(rnd_shape, fileHandler, True)
         futhark_data.dump(size, fileHandler, True)
         #print ("done")
+
+
+SEGS = np.array([2**4, 2**5, 2**6, 2**7, 2**8, 2**9, 2**10, 2**11, 2**12]).astype("int64")
+num = 10**7
+for size in SEGS:
+    str_size = matsize_to_str(num, 20)
+    arr_size = size_to_str(num)
+    name = path_name(path, prefix, size, num)
+    # #print(file_name(prefix, num, size) not in datasets)
+    if file_name(prefix, size, num) not in datasets:
+        #data = np.random.rand(num,size).astype("float32")
+        #print(data.shape, data.dtype)
+        rnd_shape = np.random.multinomial(num, np.ones(size)/size, size=1)[0].astype("int64")
+        #print(rnd_shape.shape, rnd_shape.dtype)
+        
+        #print("making "+str_size+" matrix with name "+ name)
+        print("Making: "+ name)
+        gen_data_command = "futhark dataset -b --u16-bounds="+str(0)+":"+str(size)+" -g "+str_size+"u16 > "+name
+        gen_gis_command = "futhark dataset -b -g" + arr_size+"f32 >>" + name
+        gen_his_command = "futhark dataset -b -g" + arr_size+"f32 >>" + name
+        os.system(gen_data_command)
+        os.system(gen_gis_command)
+        os.system(gen_his_command)
+        fileHandler = open(name, "ab")
+        futhark_data.dump(rnd_shape, fileHandler, True)
+        futhark_data.dump(size, fileHandler, True)

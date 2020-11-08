@@ -4,8 +4,9 @@ import numpy as np
 from collections import OrderedDict
 import matplotlib.pyplot as plt
 
-_, seq, par = sys.argv
+_, seq, par, base, name = sys.argv
 
+base = int(base)
 seq_json = json.load(open(seq), object_pairs_hook=OrderedDict)
 par_json = json.load(open(par), object_pairs_hook=OrderedDict)
 
@@ -55,10 +56,10 @@ ms_par = ms_par[sortedidxs]
 fig, ax = plt.subplots()
 ax.plot(sizes, ms_par, color="blue", label="openCL")
 ax.plot(sizes, ms_seq, color="red", label="cuda")
-ax.set_xscale("log", base=10)#2)
+ax.set_xscale("log", base=base)
 ax.set_xlabel("Size of input")
 ax.set_ylabel("Runtime(ms)")
 ax.set_title(seq +" vs "+ par)
 
 ax.legend()
-plt.savefig("partition_bench_segs.png")
+plt.savefig(name+".png")

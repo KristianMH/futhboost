@@ -44,10 +44,34 @@ partition_bench_segs_cuda: partition_data partition_bench.fut
 		      partition_bench.fut
 
 partition_bench_segs_opencl: partition_data partition_bench.fut
-	futhark bench --backend=cuda \
+	futhark bench --backend=opencl \
 		      --entry=num_segs \
 		      --json jsons/partition_bench_segs_opencl.json -r10 \
 		      partition_bench.fut
+
+histogram_bench_ele_opencl: histogram_data histogram_bench.fut
+	futhark bench --backend=opencl \
+		      --entry=num_ele \
+		      --json jsons/histogram_bench_ele_opencl.json -r10 \
+		      histogram_bench.fut
+histogram_bench_ele_cuda: histogram_data histogram_bench.fut
+	futhark bench --backend=cuda \
+		      --entry=num_ele \
+		      --json jsons/histogram_bench_ele_cuda.json -r10 \
+		      histogram_bench.fut
+
+histogram_bench_segs_cuda: histogram_data histogram_bench.fut
+	futhark bench --backend=cuda \
+		      --entry=num_segs \
+		      --json jsons/histogram_bench_segs_cuda.json -r10 \
+		      histogram_bench.fut
+
+
+histogram_bench_segs_opencl: histogram_data histogram_bench.fut
+	futhark bench --backend=opencl \
+		      --entry=num_segs \
+		      --json jsons/histogram_bench_segs_opencl.json -r10 \
+		      histogram_bench.fut
 
 partition_test: partition_data partition_test.fut
 	futhark test partition_test.fut --backend=cuda

@@ -23,7 +23,7 @@ entry num_ele [n][d][m] (data: [n][d]f32) (shp: [m]i64) (conds: [m]f32) (dims: [
 -- input @  partition_bench_data/seg_32_1000000
 -- input @  partition_bench_data/seg_64_1000000
 -- input @  partition_bench_data/seg_128_1000000
--- input @  partition_bench_data/seg_64_1000000
+-- input @  partition_bench_data/seg_256_1000000
 -- input @  partition_bench_data/seg_512_1000000
 -- input @  partition_bench_data/seg_1024_1000000
 -- input @  partition_bench_data/seg_2048_1000000
