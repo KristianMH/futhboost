@@ -4,7 +4,12 @@ import "../util" -- possible import clash with segmented_reduce?
 
 type node_vals = (f32, f32) -- gsum, hsum
 
-
+-- Returns the weight of elements in each node
+-- gis: gradients for nodes not splitting at level i
+-- his: hessians for nodes not splitting at level i
+-- shp: number of elements in each node at level i
+-- l2, eta: regulization terms.
+-- returns [num_nodes]weights
 let get_leaf_weight [n][s] (gis: [n]f32) (his: [n]f32) (shp: [s]i64) (l2: f32) (eta: f32)
                        : [s]f32 =
   let terminal_flag_arr = mkFlagArray shp false true n
@@ -16,7 +21,12 @@ let get_leaf_weight [n][s] (gis: [n]f32) (his: [n]f32) (shp: [s]i64) (l2: f32) (
     map2 (\gs hs -> eta*(-gs/(hs+l2))) gissums hissums
     -- + min_weight
 
-  
+-- calculates the gain of a split candidate
+-- gl: gradients sum of left
+-- hl: hessian sum of left
+-- g: gradient sum of node
+-- h: hessian sum of node
+-- Returns (gain, missing_dir)  
 let calc_gain (gl: f32) (hl: f32) (g: f32) (h: f32) (l2: f32) (gamma: f32) : (f32, bool) =
   --let cost_left = trace (gl**2/(hl+l2))
   let gr = g-gl
@@ -27,8 +37,15 @@ let calc_gain (gl: f32) (hl: f32) (g: f32) (h: f32) (l2: f32) (gamma: f32) : (f3
   --let res = trace (1/2*(cost_left + cost_right - cost_node) - gamma)
   in (1/2*(gl**2/(hl+l2)+gr**2/(hr+l2)-g**2/(h+l2) -gamma), true)
 
-  -- find the best split within a dimension
+-- find the best split within a dimension
+-- g_hist: gradient sums of elements in each bin
+-- h_hist: hessian sums of elements in each bin
+-- g: gradient sum of all elements in node
+-- h: hessian sum of all elements in node
 -- returns (gain, split_val, missing_dir, node_left, node_right)
+-- node_left: gradient sum and hessian sum to left child
+-- node_right: gradient sum and hessian sum to right child
+-- since we are working in bins, the split_val is u16 bin_id
 let find_split_hist [m] (g_hist: [m]f32) (h_hist: []f32) --(bin_bounds: [m]binboundaries)
                         (g: f32) (h: f32) (l2: f32) (gamma: f32)
                         : (f32, u16, bool, node_vals, node_vals) =
@@ -44,8 +61,13 @@ let find_split_hist [m] (g_hist: [m]f32) (h_hist: []f32) --(bin_bounds: [m]binbo
   in (best_gain, u16.i64 best_split_idx, flags[best_split_idx], node_left, node_right)
 
 
-  -- reduce with map2 should be implemented I think- work in progress
--- input (gain, dim_idx, seg_id)
+-- finds the best split within each node(segment) at level i
+-- it reduces over dimensions [d][s](gain, dimension, seg_id)
+-- max function takes two lists of split candidates for two features
+-- and selects the split candidation with the best gain for each segment
+-- selections the one with higest dimensions if equal in gain
+-- splits: [d][s](gain, dimension, seg_id)
+-- returns [s](gain, dimension, seg_id)
 let find_best_splits [d][s] (splits: [d][s](f32, i64, i64))
                              : [s](f32, i64, i64) =
   let max [s] (d1: [s](f32, i64, i64)) (d2: [s](f32, i64, i64))
@@ -64,6 +86,17 @@ let find_best_splits [d][s] (splits: [d][s](f32, i64, i64))
 
 -- maps over each dim -> map over each segment, everything should be regular with histograms
 -- returns (dim_idx, split_val, is_leaf?, missing_dir, node_left, node_right)
+
+-- search for splits within each feature of all split candidates for each bin
+-- g_hist: [d][s][m]f32 gradient sums for each bin in each node in each dimension
+-- h_hist: [d][s][m]f32 hessian sums for each bin in each node in each dimension
+-- g_node: [s]f32 gradient sums for each node
+-- h_node: [s]f32 hessian sums for each node
+
+-- Returns [s](dim_id, bin_split, is_leaf_flag, missing_direction, node_left, node_right)
+-- returns for each node split_dimension split bin 
+-- node_left: gradient sum and hessian sum to left child
+-- node_right: gradient sum and hessian sum to right child
 let search_splits_segs [d][s][m] (g_hists: [d][s][m]f32) (h_hists: [d][s][m]f32)
                               (g_node: [s]f32) (h_node: [s]f32)
                               --(bin_bounds: [d][m]binboundaries)
@@ -80,6 +113,7 @@ let search_splits_segs [d][s][m] (g_hists: [d][s][m]f32) (h_hists: [d][s][m]f32)
   --let ha = trace gains
   let dim_mat = map (\i -> replicate s i ) (iota d)
   let seg_mat = replicate d (iota s)
+  -- find best splits for each seg(node) in each dim
   let best_splits = find_best_splits (map3 zip3 gains dim_mat seg_mat) --|> trace
   
   -- need to add terminal leaf flag but then done.
@@ -96,9 +130,19 @@ let search_splits_segs [d][s][m] (g_hists: [d][s][m]f32) (h_hists: [d][s][m]f32)
            (0, 0u16, false, true, (0.0, 0.0), (0.0, 0.0))) best_splits
 
 
+
+-- calculates the gradient and hessian sums of the data
+-- data: [n][d]u16 bin_id of each feature value of the data
+-- gis: [n]f32 gradients for elements
+-- his: [n]f32 hessians for elemetns
+-- flag_arr: [n]i64 flag_arr representing segment starts -- should be changed to u16 and JIT casted
+-- num_segs: number of nodes(segments)
+-- num_bins: number of bins
+-- returns [d][num_nodes][num_bins] of gradient and hessian sums
 let create_histograms [n][d] (data: [n][d]u16) (gis: [n]f32) (his: [n]f32)
                       (flag_arr: [n]i64) (num_segs: i64) (num_bins: i64)
                       : ([d][num_segs][num_bins]f32, [d][num_segs][num_bins]f32) =
+  -- flat_offsets for reduce by index
   let seg_offsets = scan (+) 0i64 flag_arr |> map (\x -> (x-1)*num_bins)
   in
    map (\dim_bins ->

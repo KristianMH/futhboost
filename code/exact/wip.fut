@@ -243,3 +243,23 @@ let search_splits [n] [l] [d] (data_points: [l][d]f32) (point_idx: [l]i32)
     --splits ++ [(sorted_data[best_split_idx], max_gain)]
   --splits ++ [(xgboost_split_val, max_gain)]
   (max_gain, xgboost_split_val, gains[best_split_idx].1)
+
+
+  --let sorted = 
+    --radix_sort_float_by_key (.0) f32.num_bits f32.get_bit rest --|> unzip3
+  -- let gains = map (\x ->
+  --                    let value = x.0
+  --                    let (left, _) = partition (\x -> x.0 <= value) sorted
+  --                    let (_, gl, hl) = unzip3 left
+  --                    let gls = reduce (+) 0f32 gl
+  --                    let hls = reduce (+) 0f32 hl
+  --                    in
+  --                    gain gls hls g_node h_node l2 gamma missing_gis_sum missing_his_sum
+  --                 ) sorted
+  -- let (best_split_idx, max_gain) = (unzip gains).0 |> arg_max
+  -- let ha = trace best_split_idx
+  -- let xgboost_split_val =
+  --   if best_split_idx < (length sorted)-1 then
+  --     (sorted[best_split_idx].0 + sorted[best_split_idx+1].0)/2
+  --   else
+  --     sorted[best_split_idx].0*2
