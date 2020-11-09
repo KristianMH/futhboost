@@ -13,13 +13,14 @@ let log2 x = (loop (y,c) = (x,0i32) while y > 1i32 do (y >> 1, c+1)).1
 let permute [n][m] 't (xs: [n]t) (idxs: [m]i64): *[m]t =
   map (\i -> xs[i]) idxs
 
+-- permutes 2D array
 let permute2D 't [m][d] (arr: [m][d]t) (inds: [m]i64) : *[m][d]t =
   map (\ind -> map (\j -> arr[ind,j]) (iota d) ) inds
       
 -- operator applied elementwise on tuple of length 2
 let tuple_math 't (op: t -> t-> t)(n1: (t,t)) (n2: (t,t)) = (op n1.0 n2.0, op n1.1 n2.1)
 
-
+-- scatter2D array
 let scatter2D [m][d][n] 't (arr2D: *[m][d]t) (inds: [n]i64) (vals2D: [n][d]t): *[m][d]t =
   let flat_length = n*d
   let flat_inds = map (\i -> let (k, r) = (i / d,
@@ -29,7 +30,7 @@ let scatter2D [m][d][n] 't (arr2D: *[m][d]t) (inds: [n]i64) (vals2D: [n][d]t): *
   in
   unflatten m d res
 
-  -- can be smarter!
+  -- can be smarter! should take list of node indices
 let getChildren (i: i64): [2]i64 =
   [2*i, 2*i+1]
 
@@ -53,6 +54,7 @@ let mkFlagArray 't [m]
   scatter (replicate r zero) shp_ind vals
 
 -- addded resulting length to handle errors (from lib segmented)
+-- applies reduce within segment defined by flag array
 let segmented_reduce [n] 't (op: t -> t -> t) (ne: t)
                             (flags: [n]bool) (as: [n]t) (r: i64) : [r]t =
   -- Compute segmented scan.  Then we just have to fish out the end of
@@ -81,7 +83,8 @@ let replicated_iota [n] (reps:[n]i64) (r: i64) : [r]i64 =
   in segmented_scan (+) 0 flags tmp
 
 
-
+-- returns the permutation indexes from boolean array along with split index
+-- resembles partition
 let get_permute_idxs [n] (conds: [n]bool) : (i64, [n]i64) =
   let true_flags = map i64.bool conds
   let true_idxs = scan (+) 0 true_flags
@@ -93,7 +96,9 @@ let get_permute_idxs [n] (conds: [n]bool) : (i64, [n]i64) =
   (i, idxs)
 
 
-  
+-- Calculates new shape of nodes based on indicies from partition_lifted
+-- s1: old shape
+-- s2: split indices from partition_lifted
 let calc_new_shape [s] (s1: [s]i64) (s2: [s]i64) : []i64 =
  map2 (\i j -> [j, i-j]) s1 s2 |> flatten
 -- let segmented_partition_idxs [s] (conds: [s]bool) (shp: [s]i32)

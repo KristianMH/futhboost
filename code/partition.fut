@@ -1,10 +1,18 @@
 import "lib/github.com/diku-dk/segmented/segmented"
 import "util"
 
+-- change i64 flag_arr to u16 flag_arr unlikely more than 2**16 segs (soft cap)
 -- -- -- perserves shape, assumes vals non-empty otherwise pass ne?
 -- -- operator: val[i] < limit
+-- does apply partition within each segment supplied with shp for a 2D array
+-- conds: list of tuples with split dimensions and value for each segment
+-- ne: neutral element for scatter
+-- op: comparison operator
+-- shp: number of elements in each segment
+-- vals: values to split
+-- Returns: split data and split indicies for each segment.
 let partition_lifted [n][l][d] 't (conds: [l](i64, t)) (ne: t) (op: t -> t -> bool) (shp: [l]i64)
-                                  (vals: [n][d]t) : ([n][d]t, []i64) =
+                                  (vals: [n][d]t) : ([n][d]t, [l]i64) =
   let flag_arr = mkFlagArray shp 0 1 n
   let bool_flag_arr = map bool.i64 flag_arr
   let seg_offsets_idx = scan (+) 0 flag_arr |> map (\x -> x-1)
@@ -25,8 +33,18 @@ let partition_lifted [n][l][d] 't (conds: [l](i64, t)) (ne: t) (op: t -> t -> bo
   (scatter2D (replicate n (replicate d ne)) idxs vals, num_true_in_segs)
 
 
+
+
+-- does apply partition within each segment supplied with shp for a 2D array
+-- conds: list of tuples with split dimensions and value for each segment
+-- ne: neutral element for scatter
+-- op: comparison operator
+-- shp: number of elements in each segment
+-- vals: values to split
+-- Returns: index permutation to split data and split indicies for each segment
+-- along with boolean values -- should remove boolean values?
 let partition_lifted_idx [n][l][d] 't (conds: [l](i64, t)) (ne: t) (op: t -> t -> bool) (shp: [l]i64)
-                                  (vals: [n][d]t) : ([n]i64, []i64, [n]bool) =
+                                  (vals: [n][d]t) : ([n]i64, [l]i64, [n]bool) =
   let flag_arr = mkFlagArray shp 0 1 n
   let bool_flag_arr = map bool.i64 flag_arr
   let seg_offsets_idx = scan (+) 0 flag_arr |> map (\x -> x-1)

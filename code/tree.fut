@@ -7,13 +7,16 @@ let leftchild 't (i: i64) (tree: []t): (i64, t) =
 let parent 't (i: i64) (tree: []t): (i64, t) =
   (i/2, tree[i/2])
 
+-- creates a tree with 2^(d+1)-1 nodes with dummy value t
 let mktree 't (d: i64) (x: t): *[]t =
   let max_num_nodes = (1 << (d+1)) - 1
   in
   replicate max_num_nodes x
 
 
-
+-- loops through a tree for an element untill it reaches a leaf
+-- x: element to predict value
+-- tree: decision tree returned from training
 let predict (x: []f32) (tree: [](i64, f32, bool, bool)) : f32 =
   let (_, res, _) =
     loop (i, value, at_node)=(1, 0, true) while at_node do
