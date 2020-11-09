@@ -76,11 +76,31 @@ histogram_bench_segs_opencl: histogram_data histogram_bench.fut
 partition_test: partition_data partition_test.fut
 	futhark test partition_test.fut --backend=cuda
 
-# partition_bench_bin_opencl: partition_data partition_bench.fut
-# 	futhark bench --backend=opencl \
-# 		      --entry=num_partition \
-# 		      --json jsons/partition_bench_opencl.json -r10 \
-# 		      partition_bench.fut
+
+plot_bins_bench_ele: jsons/bins_bench_ele_cuda.json jsons/bins_bench_ele_opencl.json
+	python plot_jsons.py jsons/bins_bench_ele_cuda.json jsons/bins_bench_ele_opencl.json \
+	       10 bins_bench_ele
+
+# plot_bins_bench_bins: jsons/bins_bench_bins_cuda.json jsons/bins_bench_segs_bins.json
+# 	python plot_jsons.py jsons/bins_bench_bins_cuda.json jsons/bins_bench_bins_opencl.json \
+# 	       2 bins_bench_bins
+
+plot_partition_bench_ele: jsons/partition_bench_ele_cuda.json jsons/partition_bench_ele_opencl.json
+	python plot_jsons.py jsons/partition_bench_ele_cuda.json jsons/partition_bench_ele_opencl.json \
+           10 partition_bench_ele
+
+plot_partition_bench_segs: jsons/partition_bench_segs_cuda.json jsons/partition_bench_segs_opencl.json
+	python plot_jsons.py jsons/partition_bench_segs_cuda.json jsons/partition_bench_segs_opencl.json \
+           2 partition_bench_segs
+
+plot_histogram_bench_ele: jsons/histogram_bench_ele_cuda.json jsons/histogram_bench_ele_opencl.json
+	python plot_jsons.py jsons/histogram_bench_ele_cuda.json jsons/histogram_bench_ele_opencl.json \
+           10 histogram_bench_ele
+
+plot_histogram_bench_segs: jsons/histogram_bench_segs_cuda.json jsons/histogram_bench_segs_opencl.json
+	python plot_jsons.py jsons/histogram_bench_segs_cuda.json jsons/histogram_bench_segs_opencl.json \
+           2 histogram_bench_segs
+
 all:clean
 
 clean:
