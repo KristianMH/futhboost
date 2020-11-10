@@ -30,10 +30,10 @@ let greedyFindBin [l] (distinct_values: [l]f32) (counts: [l]i32)
           in
           (new_bounds, new_cur, new_offset)
       in
-      (new_bounds with [new_offset]= f32.highest, offset+1)
+      (new_bounds with [new_offset]= f32.highest, new_offset+1)
     else
       let max_bin = if min_data_bin > 0 then
-                    let max_bin = i64.min max_bin total_num_samples/max_bin
+                    let max_bin = i64.min max_bin total_num_samples/min_data_bin
                     in
                       i64.max max_bin 1
                     else
@@ -75,7 +75,8 @@ let greedyFindBin [l] (distinct_values: [l]f32) (counts: [l]i32)
                  (is_big_count[i+1] && f32.i32 cur_in_bin >= f32.max 1f32 (mean_bin_size*0.5)) then
                 if (bin_cnt == max_bin-1) then -- last update then "break" by just looping no-ops.
                   let upper_bounds = upper_bounds with [bin_cnt] = distinct_values[i]
-                  let bin_cnt = bin_cnt+1
+                  --let bin_cnt = bin_cnt+1
+                  --let ha = trace (bin_cnt, lower_bounds)
                   let lower_bounds = lower_bounds with [bin_cnt] = distinct_values[i+1]
                   in
                     (upper_bounds, bin_cnt, lower_bounds, cur_in_bin, mean_bin_size, rest_bin_cnt)
@@ -109,7 +110,7 @@ let greedyFindBin [l] (distinct_values: [l]f32) (counts: [l]i32)
               (bin_upper_bounds with [offset] = value, offset+1)
             else
               (bin_upper_bounds, offset)
-      let ha = trace (offset, max_bin, bin_upper_bounds)
+      --let ha = trace (offset, max_bin, bin_upper_bounds)
       let bin_upper_bounds = bin_upper_bounds with [offset] = f32.highest
       in
       (bin_upper_bounds, offset+1)
@@ -131,12 +132,11 @@ let find_bounds [l] (distinct_values: [l]f32) (counts: [l]i32) (num_bins: u16)
   --let split_i_neg = map i32.bool neg_counts |> i32.sum |> (\t -> t-1)
   let split_i_neg = length neg_values
   let num_neg_samples = i32.sum neg_counts |> i64.i32
-  let (_, pos) = partition (\x -> x.0 < zero_thres) zero_plus
+  let (zeros, pos) = partition (\x -> x.0 < zero_thres) zero_plus
   let (pos_values, pos_counts) = unzip pos
   -- let (pos_counts, pos_b) = map (>= -zero_thres) distinct_values |> zip counts
   --                          |> filter (.1) |> unzip
   --let split_i_pos = map i32.bool pos_counts |> i32.sum |> (\t -> i32.i64 l-t-1) -- need off by one?
-  let split_i_pos = length pos_values
   let num_pos_samples = i32.sum pos_counts |> i64.i32
   let split_i_neg = if split_i_neg < 0 then l else split_i_neg
   let left_max_bin =
@@ -153,10 +153,11 @@ let find_bounds [l] (distinct_values: [l]f32) (counts: [l]i32) (num_bins: u16)
         (bin_upper_bounds, offset)
     else
       (replicate left_max_bin 0.0f32, 0)
-
+  let split_i_pos = length pos_values - split_i_neg - ((unzip zeros).1 |> i32.sum |> i64.i32) -1
+  let ha = trace (upper_bounds, neg_offset)
   let upper_bounds = upper_bounds[:neg_offset]
   let right_max_bin = i64.u16 num_bins - 1 - neg_offset -- offset == length upper_bounds?!!
-  let ha = trace(right_max_bin, split_i_pos)
+  let ha = trace(right_max_bin, split_i_pos, right_max_bin)
   let (rest_upper_bounds, offset) = 
     if (split_i_pos >= 0) && (right_max_bin > 0) then
       let (new_bounds, offset) =
@@ -168,7 +169,7 @@ let find_bounds [l] (distinct_values: [l]f32) (counts: [l]i32) (num_bins: u16)
       -- add limit = infinity (f32.max)
       ([f32.highest], 1)
 
-     
+  let ha = trace (rest_upper_bounds, offset)
   --let final_bounds = upper_bounds ++ [-zero_thres] ++ rest_upper_bounds[:offset]
   in
   if length upper_bounds > 0 then
@@ -248,5 +249,24 @@ let findBin [n] (vals: [n]f32) (num_bins: u16) : []f32 =
 
 
 
+let value_to_bin [n] (value: f32) (bin_bounds: [n]f32) (num_bins: u16) : u16 =
+  let l = 0
+  let r = num_bins -1
+  let r = r-1
+  let (l, _) =
+    loop (l, r) = (l, r) while l < r do
+      let m = (r+l-1)/2
+      in
+        if (value <= bin_bounds[i64.u16 m]) then
+          (l, m)
+        else
+          (m+1, r)
+  in
+  l
+
+  
+
 let arr = [-10.0f32, 5.0, 3.0, -30.0, 2.0, 4.0, 0.0, 70.3, 12578.3, 3.2]
-let test = findBin arr 3u16
+let num_bins = 7u16
+let test = findBin arr num_bins
+let res = map (\v -> value_to_bin v test num_bins) arr
