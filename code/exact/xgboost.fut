@@ -61,37 +61,38 @@ let search_splits_feature [n] (data_points: [n]f32) (gis: [n]f32) (his: [n]f32)
   let (_, miss_g, miss_h) = unzip3 missing
   let missing_gis_sum = reduce (+) 0f32 miss_g
   let missing_his_sum = reduce (+) 0f32 miss_h
-
-  let (sorted_data, sorted_gis, sorted_his) =
-    radix_sort_float_by_key (.0) f32.num_bits f32.get_bit rest |> unzip3
-  -- since sorted, find all unique element segments
-  let unique_seg_starts = map2 (!=) sorted_data (rotate (-1) sorted_data)
-  -- num unique
-  let l = map i32.bool unique_seg_starts |> i32.sum |> i64.i32
-  -- calculate sum of gradients and hessians of elements with same value
-  -- since we cannot split between elements with same value
-  let seg_gis = segmented_reduce (+) 0f32 unique_seg_starts sorted_gis l
-  let seg_his = segmented_reduce (+) 0f32 unique_seg_starts sorted_his l
-  -- calculate gradient and hessian sums for each possible split
-  let scan_gis = scan (+) 0f32 seg_gis
-  let scan_his = scan (+) 0f32 seg_his
-  -- find unique elements in sorted data for determination of split_value
-  let sorted_data = zip sorted_data unique_seg_starts |> filter (.1) |> unzip |> (.0)
-  let gains = map2 (\g h -> gain g h g_node h_node l2 gamma missing_gis_sum missing_his_sum)
-                   scan_gis scan_his
-  let (best_split_idx, max_gain) = (unzip gains).0 |> arg_max
-  --let ha = trace best_split_idx
   in
-  -- encountered nan values all gain? dont know how however this fixes it.
-  if best_split_idx < 0 then
-    (-1f32, f32.nan, false)
+  if length rest == 0 then
+    (-1f32, -1f32, false)
   else
-    let xgboost_split_val =
-      if best_split_idx < (length sorted_data)-1 then
-        (sorted_data[best_split_idx] + sorted_data[best_split_idx+1])/2
-      else
-        sorted_data[best_split_idx]*2 -- apprently multiply with 2 in xgboost impl
+    let (sorted_data, sorted_gis, sorted_his) =
+      radix_sort_float_by_key (.0) f32.num_bits f32.get_bit rest |> unzip3
+    -- since sorted, find all unique element segments
+    let unique_seg_starts = map2 (!=) sorted_data (rotate (-1) sorted_data)
+    -- num unique
+    let l = map i32.bool unique_seg_starts |> i32.sum |> i64.i32
     in
+      if l == 0 then -- all data points have same value cannot split
+        (-1f32, f32.nan, false)
+      else
+      -- sum of gradients and hessians of elements with same value
+      -- since we cannot split between elements with same value
+      let seg_gis = segmented_reduce (+) 0f32 unique_seg_starts sorted_gis l
+      let seg_his = segmented_reduce (+) 0f32 unique_seg_starts sorted_his l
+      -- calculate gradient and hessian sums for each possible split
+      let scan_gis = scan (+) 0f32 seg_gis
+      let scan_his = scan (+) 0f32 seg_his
+      -- find unique elements in sorted data for determination of split_value
+      let sorted_data = zip sorted_data unique_seg_starts |> filter (.1) |> unzip |> (.0)
+      let gains = map2 (\g h -> gain g h g_node h_node l2 gamma missing_gis_sum missing_his_sum)
+                       scan_gis scan_his
+      let (best_split_idx, max_gain) = (unzip gains).0 |> arg_max
+      let xgboost_split_val =
+        if best_split_idx < (length sorted_data)-1 then
+          (sorted_data[best_split_idx] + sorted_data[best_split_idx+1])/2
+        else
+          sorted_data[best_split_idx]*2 -- apprently multiply with 2 in xgboost impl
+      in
       (max_gain, xgboost_split_val, gains[best_split_idx].1)
 
 
@@ -189,7 +190,7 @@ let train_round [n][d] (data: [n][d]f32) (labels: [n]f32) (preds: [n]f32) (max_d
       -- find nodes which is split
       let (active_nodes, active_shp, active_conds, _) =
         zip4 nodes shp new_conds active_node_flags |> filter (.3) |> unzip4
-      -- flag_arr and offsets needed to index active_node_flags to find active data
+                                                                     
       let flag_arr = mkFlagArray shp 0u16 1u16 active_points_length
       let seg_offsets = scan (+) 0u16 flag_arr |> map (\t -> t-1u16)
       -- find active data, gis, his
@@ -197,20 +198,22 @@ let train_round [n][d] (data: [n][d]f32) (labels: [n]f32) (preds: [n]f32) (max_d
         zip4 data gis his seg_offsets |>
         filter (\x -> let idx = i64.u16 x.3 in active_node_flags[idx]) |>
         unzip4
+      let (new_data, new_gis, new_his, split_shape) =
+        partition_lifted_by_vals active_conds 0f32 (<) active_shp active_data active_gis active_his
       -- get indices to split active data according to conditions found in active_conds
-      let (idxs, split_shape, _) = partition_lifted_idx active_conds 0f32 (<) active_shp
-                                                        active_data
-      let num_active = length active_data
-      let new_data = scatter2D (replicate num_active (replicate d 0f32))
-                               idxs active_data
+      -- let (idxs, split_shape, _) = partition_lifted_idx active_conds 0f32 (<) active_shp
+      --                                                   active_data
+      -- let num_active = length active_data
+      -- let new_data = scatter2D (replicate num_active (replicate d 0f32))
+      --                          idxs active_data
 
-      -- dont know which faster zip |> scatter |> unzip or double scatter
-      -- let (new_gis, new_his) = 
-      --   scatter (replicate num_active (0f32, 0f32)) idxs (zip active_gis active_his) |> unzip
-      let new_gis = scatter (replicate num_active 0f32) idxs active_gis
-      let new_his = scatter (replicate num_active 0f32) idxs active_his
+      -- -- dont know which faster zip |> scatter |> unzip or double scatter
+      -- -- let (new_gis, new_his) = 
+      -- --   scatter (replicate num_active (0f32, 0f32)) idxs (zip active_gis active_his) |> unzip
+      -- let new_gis = scatter (replicate num_active 0f32) idxs active_gis
+      -- let new_his = scatter (replicate num_active 0f32) idxs active_his
       -- get new shape of level i+1
-      let new_shp = calc_new_shape active_shp split_shape
+      let new_shp = calc_new_shape active_shp split_shape 
       let he = trace new_shp
       -- get node indices for nodes at level i+1
       let new_nodes = map getChildren active_nodes |> flatten
@@ -245,5 +248,5 @@ let train [n][d] (data: [n][d]f32) (labels: [n]f32) (max_depth: i64) (n_rounds: 
           
 --let eval = train data[:,:2] data[:,2] 3 3 0.5 0.3 0
              
-let main [n][d] (data: [n][d]f32) (labels: [n]f32) = train data labels 3 91 0.5 0.3 0
+let main [n][d] (data: [n][d]f32) (labels: [n]f32) = train data labels 3 100 0.5 0.3 0
 let test = train woopdata wooptarget 3 6 0.5 0.3 0
