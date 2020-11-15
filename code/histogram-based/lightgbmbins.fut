@@ -5,33 +5,28 @@ import "woop"
 
 let zero_thres = 0.00000000000000001f32
 
-let greedyFindBin [l] (distinct_values: [l]f32) (counts: [l]i32)
+let greedyFindBin [l] (distinct_values: [l]f32) (counts: [l]i64)
                       (max_bin: i64) (total_num_samples: i64) (min_data_bin: i64)
                       : ([max_bin]f32, i64) =
   let bin_upper_bounds = replicate max_bin f32.lowest
   let ha = trace (max_bin, l, total_num_samples)
-  let offset = 0
   let (bin_upper_bounds, offset) =
     if (l <= max_bin) then
       let (new_bounds, _, new_offset) = 
-        loop (upper_bounds, cur_in_bin, offset) = (bin_upper_bounds, 0, offset) for i < l-1 do
+        loop (upper_bounds, cur_in_bin, offset) = (bin_upper_bounds, 0, 0) for i < l-1 do
           let cur_in_bin = cur_in_bin + counts[i]
-          let (new_bounds, new_cur, new_offset) = 
-            if (cur_in_bin >= i32.i64 min_data_bin) then
+          in
+            if cur_in_bin >= min_data_bin then
               let value = (distinct_values[i]+distinct_values[i+1])/2f32
               in
                 if (offset == 0) || (upper_bounds[offset] <= value) then
-                  let cur_in_bin = 0
-                  in
-                    (upper_bounds with [offset] = value, cur_in_bin, offset+1)
+                  (upper_bounds with [offset] = value, 0, offset+1)
                 else
                   (upper_bounds, cur_in_bin, offset)
             else
               (upper_bounds, cur_in_bin, offset)
-          in
-          (new_bounds, new_cur, new_offset)
       in
-      (new_bounds with [new_offset]= f32.highest, new_offset+1)
+        (new_bounds with [new_offset]= f32.highest, new_offset+1)
     else
       let max_bin = if min_data_bin > 0 then
                     let max_bin = i64.min max_bin total_num_samples/min_data_bin
@@ -42,22 +37,12 @@ let greedyFindBin [l] (distinct_values: [l]f32) (counts: [l]i32)
       let ha = trace max_bin
       let mean_bin_size = f32.i64 total_num_samples / f32.i64 max_bin
       let ha = trace mean_bin_size
-      let rest_bin_cnt = max_bin
-      let rest_sample_cnt = total_num_samples
-      let is_big_count = replicate l false
-      let big_offset = 0
-      let (is_big_count, big_offset, rest_bin_cnt, rest_sample_cnt) =
-        loop (is_big_count, big_offset, rest_bin_cnt, rest_sample_cnt) =
-          (is_big_count, big_offset, rest_bin_cnt, rest_sample_cnt) for i < l do
-            if (f32.i32 counts[i] >= mean_bin_size) then
-              let new_arr = is_big_count with [big_offset] = true
-              let new_sample_cnt = rest_sample_cnt- i64.i32 counts[i]
-              in
-                (new_arr, big_offset+1, rest_bin_cnt-1, new_sample_cnt)
-            else
-              (is_big_count, big_offset, rest_bin_cnt, rest_sample_cnt)
-      --let is_big_count = is_big_count[:big_offset]
-      --let ha = trace is_big_count
+      
+      let is_big_count = map (\x -> f32.i64 x >= mean_bin_size) counts
+      let (_, big_counts) = zip is_big_count counts |> filter (.0) |> unzip
+      let rest_bin_cnt = max_bin - (length big_counts)
+      let rest_sample_cnt = total_num_samples - (i64.sum big_counts)
+
       let mean_bin_size = f32.i64 rest_sample_cnt / f32.i64 rest_bin_cnt
       let upper_bounds = replicate max_bin f32.highest
       let lower_bounds = replicate max_bin f32.highest
@@ -66,52 +51,58 @@ let greedyFindBin [l] (distinct_values: [l]f32) (counts: [l]i32)
       let (upper_bounds, lower_bounds, bin_cnt, _, _, _, _) =
         loop (upper_bounds, lower_bounds, bin_cnt, rest_sample_cnt,
               cur_in_bin, mean_bin_size, rest_bin_cnt) =
-          (upper_bounds, lower_bounds, bin_cnt, rest_sample_cnt, 0i32, mean_bin_size, rest_bin_cnt)
+          (upper_bounds, lower_bounds, bin_cnt, rest_sample_cnt, 0, mean_bin_size, rest_bin_cnt)
           for i < l-1 do
             let rest_sample_cnt = if (!is_big_count[i]) then
-                                    rest_sample_cnt- i64.i32 counts[i]
+                                    rest_sample_cnt - counts[i]
                                   else
                                     rest_sample_cnt
-            let cur_in_bin = if (bin_cnt >= max_bin-1) then cur_in_bin else
+            let cur_in_bin = if (bin_cnt >= max_bin-1) then
+                               cur_in_bin -- do not update during no-ops
+                             else
                                cur_in_bin + counts[i]
-            --let ha = trace (cur_in_bin, bin_cnt, mean_bin_size)
-            let (upper_bounds,lower_bounds, bin_cnt, cur_in_bin, mean_bin_size, rest_bin_cnt) =
-              if is_big_count[i] || (f32.i32 cur_in_bin >= mean_bin_size) ||
-                 (is_big_count[i+1] && f32.i32 cur_in_bin >= f32.max 1f32 (mean_bin_size*0.5)) then
-                if (bin_cnt == max_bin-2) then -- last update then "break" by just looping no-ops.
-                  let upper_bounds = upper_bounds with [bin_cnt] = distinct_values[i]
-                  let bin_cnt = bin_cnt+1
-                  --let ha = trace (bin_cnt, lower_bounds)
-                  let lower_bounds = lower_bounds with [bin_cnt] = distinct_values[i+1]
-                  --let ha = trace (lower_bounds, upper_bounds)
-                  in
-                    (upper_bounds, lower_bounds, bin_cnt, cur_in_bin, mean_bin_size, rest_bin_cnt)
-                  else if (bin_cnt < max_bin-1) then
-                       let upper_bounds = upper_bounds with [bin_cnt] = distinct_values[i]
-                       let bin_cnt = bin_cnt+1
-                       let lower_bounds = lower_bounds with [bin_cnt] = distinct_values[i+1]
-                       let cur_in_bin = 0
-                       let (rest_bin_cnt, mean_bin_size) =
-                         if !is_big_count[i] then
-                           (rest_bin_cnt-1, f32.i64 rest_sample_cnt / f32.i64 (rest_bin_cnt-1))
-                         else
-                           (rest_bin_cnt, mean_bin_size)
-                       in
-                       (upper_bounds, lower_bounds, bin_cnt, cur_in_bin, mean_bin_size, rest_bin_cnt)
-                  else
-                    (upper_bounds, lower_bounds, bin_cnt, cur_in_bin, mean_bin_size, rest_bin_cnt)
-                    -- do nothing
-              else
-                (upper_bounds, lower_bounds, bin_cnt, 
-                 cur_in_bin, mean_bin_size, rest_bin_cnt) -- do notthing
-            in
-            (upper_bounds, lower_bounds, bin_cnt, rest_sample_cnt,
-             cur_in_bin, mean_bin_size, rest_bin_cnt)
-      let ha = trace lower_bounds
-      let he = trace upper_bounds
-      let bin_cnt = bin_cnt +1
+            in 
+              if is_big_count[i] || f32.i64 cur_in_bin >= mean_bin_size ||
+                 is_big_count[i+1] && f32.i64 cur_in_bin >= f32.max 1 (mean_bin_size*0.5) then
+                 if bin_cnt == (max_bin -2) then -- last update then "break" by just looping no-ops.
+                   let upper_bounds = upper_bounds with [bin_cnt] = distinct_values[i]
+                   let bin_cnt = bin_cnt+1
+                   let lower_bounds = lower_bounds with [bin_cnt] = distinct_values[i+1]
+                   in
+                     (upper_bounds, lower_bounds, bin_cnt, rest_sample_cnt, cur_in_bin,
+                      mean_bin_size, rest_bin_cnt)
+                 else if (bin_cnt < max_bin-2) then
+                   let upper_bounds = upper_bounds with [bin_cnt] = distinct_values[i]
+                   let bin_cnt = bin_cnt+1
+                   let lower_bounds = lower_bounds with [bin_cnt] = distinct_values[i+1]
+                   let cur_in_bin = 0
+                   let (rest_bin_cnt, mean_bin_size) =
+                     if !is_big_count[i] then
+                       (rest_bin_cnt-1, f32.i64 rest_sample_cnt / f32.i64 (rest_bin_cnt-1))
+                     else
+                       (rest_bin_cnt, mean_bin_size)
+                   in
+                     (upper_bounds, lower_bounds, bin_cnt, rest_sample_cnt, cur_in_bin,
+                      mean_bin_size, rest_bin_cnt)
+                 else -- no op
+                   (upper_bounds, lower_bounds, bin_cnt, rest_sample_cnt, cur_in_bin,
+                    mean_bin_size, rest_bin_cnt)
+              else -- no op
+                (upper_bounds, lower_bounds, bin_cnt, rest_sample_cnt, cur_in_bin,
+                 mean_bin_size, rest_bin_cnt)
+      --let ha = trace lower_bounds
+      --let he = trace upper_bounds
+      --let bin_cnt = bin_cnt +1
+      -- let vals = map (\i -> if i == (max_bin-1) then
+      --                         f32.highest
+      --                       else
+      --                         (upper_bounds[i] + lower_bounds[i+1])/2f32) (iota bin_cnt)
+      -- let flags = map2 (\v v1 -> !(v >= v1)) (rotate (-1) vals) vals
+      -- let bin_upper_bounds = zip vals flags |> filter (.1) |> unzip |> (.0)
+      -- in
+      -- (bin_upper_bounds, length bin_upper_bounds)
       let (bin_upper_bounds, offset) =
-        loop (bin_upper_bounds, offset) = (bin_upper_bounds, 0) for i < bin_cnt - 1 do
+        loop (bin_upper_bounds, offset) = (bin_upper_bounds, 0) for i < bin_cnt do
           let value = (upper_bounds[i] + lower_bounds[i+1])/2f32
           in
             if (offset == 0) || !(bin_upper_bounds[offset] >= value) then -- maybe just >?
@@ -129,35 +120,43 @@ let greedyFindBin [l] (distinct_values: [l]f32) (counts: [l]i32)
 
 
 --find_bounds distinct_values counts num_distinct num_bins n min_data_bin
-let find_bounds [l] (distinct_values: [l]f32) (counts: [l]i32) (num_bins: u16)
+let find_bounds [n][m] (negs: [n](f32, i64)) (pos: [m](f32, i64)) (num_bins: u16)
                     (total_num_samples: i64) (min_data_bin: i64) (zero_cnt: i64)
                     : []f32  =
-  --let (neg_count) = partition (<= -zero_thres) distinct_values |> (.0) |> length
-  -- let (neg_counts, neg_values) = map (<= -zero_thres) distinct_values |> zip counts
-  --                          |> filter (.1) |> unzip
-  let (negs, zero_plus) = zip distinct_values counts |> partition (\x -> x.0 <= -zero_thres)
   let (neg_values, neg_counts) = unzip negs
-  --let split_i_neg = map i32.bool neg_counts |> i32.sum |> (\t -> t-1)
-  let split_i_neg = length neg_values
-  --let ha = trace (length neg_counts)
-  let num_neg_samples = i32.sum neg_counts |> i64.i32
-  let (zeros, pos) = partition (\x -> x.0 <= zero_thres) zero_plus
+  --let split_i_neg = length neg_values
+  --let split_i_neg = n-1
+  --let split_i_pos = m+1 -- remember zero between neg and pos
+  let num_neg_samples = i64.sum neg_counts
   let (pos_values, pos_counts) = unzip pos
-  -- let (pos_counts, pos_b) = map (>= -zero_thres) distinct_values |> zip counts
-  --                          |> filter (.1) |> unzip
-  --let split_i_pos = map i32.bool pos_counts |> i32.sum |> (\t -> i32.i64 l-t-1) -- need off by one?
-  let num_pos_samples = i32.sum pos_counts |> i64.i32
-  let split_i_neg = if split_i_neg == 0 then l else split_i_neg
-  --let ha = trace (split_i_neg, total_num_samples, num_bins-1)
-  let left_max_bin =
+  let num_pos_samples = i64.sum pos_counts
+
+  -- let split_i_neg = if split_i_neg < 0 then
+  --                     m+1
+  --                   else
+  --                     split_i_neg
+  let split_i_neg =
+    let max ((d1,i1): (f32, i64)) ((d2,i2): (f32, i64)) =
+      if d1 > -zero_thres && d2 > -zero_thres then (d1, i1)
+      else if d1 > -zero_thres then (d1, i1)
+      else if d2 > -zero_thres then (d2, i2)
+      else (d1, i1)
+    in
+    reduce_comm max (f32.lowest, -1) (zip neg_values (iota n)) |> (.1)
+  let split_i_neg = if split_i_neg < 0 then
+                      m+1
+                    else
+                      split_i_neg
+  let split_i_pos = split_i_neg + 1 -- why split_i_pos?
+  let left_max_bin = 
     i64.f32 ((f32.i64 num_neg_samples)/(f32.i64 (total_num_samples-zero_cnt)) *f32.u16 (num_bins-1))
-  let ha = trace left_max_bin
+  --let ha = trace left_max_bin
   let left_max_bin = i64.max 1 left_max_bin
-  let hehe = trace (split_i_neg, num_bins)
+  --let hehe = trace (split_i_neg, num_bins)
   let (upper_bounds, neg_offset) =
     if (split_i_neg > 0) && (num_bins > 1) then
       -- bin upper bounds
-      let ha = trace (length neg_counts, left_max_bin, num_neg_samples, min_data_bin)
+      --let ha = trace (length neg_counts, left_max_bin, num_neg_samples, min_data_bin)
       let (bin_upper_bounds, offset) =
         greedyFindBin neg_values neg_counts left_max_bin num_neg_samples min_data_bin
       in
@@ -165,16 +164,14 @@ let find_bounds [l] (distinct_values: [l]f32) (counts: [l]i32) (num_bins: u16)
     else
       (replicate left_max_bin 0.0f32, 0)
       
-  --let split_i_pos = length pos_values - split_i_neg - ((unzip zeros).1 |> i32.sum |> i64.i32) -1
-  let split_i_pos = length pos_values
-  let ha = trace (upper_bounds, neg_offset)
+  --let ha = trace (upper_bounds, neg_offset)
   let upper_bounds = upper_bounds[:neg_offset]
   let right_max_bin = i64.u16 num_bins - 1 - neg_offset -- offset == length upper_bounds?!!
   let ha = trace(right_max_bin, split_i_pos)
   let (rest_upper_bounds, offset) = 
     if (split_i_pos >= 0) && (right_max_bin > 0) then
       let (new_bounds, offset) =
-        greedyFindBin pos_values pos_counts right_max_bin num_pos_samples  min_data_bin
+        greedyFindBin pos_values pos_counts right_max_bin num_pos_samples min_data_bin
       in
          --(new_bounds with [offset] = zero_thres, offset+1)
          (new_bounds, offset)
@@ -189,9 +186,9 @@ let find_bounds [l] (distinct_values: [l]f32) (counts: [l]i32) (num_bins: u16)
     if (split_i_pos >= 0) && (right_max_bin > 0) then
       upper_bounds[:neg_offset-1] ++ [-zero_thres] ++ [zero_thres] ++ rest_upper_bounds[:offset]
     else
-      upper_bounds[:neg_offset-1] ++ [-zero_thres] ++ upper_bounds[:offset]
+      upper_bounds[:neg_offset-1] ++ [-zero_thres] ++ [f32.highest]
   else
-    upper_bounds
+    [zero_thres] ++ rest_upper_bounds[:offset]
 
 
 
@@ -214,17 +211,20 @@ let findBin [n] (vals: [n]f32) (num_bins: u16) : []f32 =
     let num = (length distinct_values)
     let distinct_values = distinct_values :> [num]f32
     let counts = segmented_reduce (+) 0 unique_start (replicate num_samples 1i32) num
+    let counts = map i64.i32 counts
     let (neg, pos) = zip distinct_values counts |> partition (\x -> x.0 < 0)
     let (neg_vals, neg_counts) = unzip neg
     let (pos_vals, pos_counts) = unzip pos
-    let num = num +1
-    let distinct_values = neg_vals ++ [0f32] ++ pos_vals :> [num]f32
-    let counts = neg_counts ++ [i32.i64 zero_cnt] ++ pos_counts :> [num]i32
+    --let num = num +1
+    -- let distinct_values = neg_vals ++ [0f32] ++ pos_vals :> [num]f32
+    -- let counts = neg_counts ++ [i32.i64 zero_cnt] ++ pos_counts :> [num]i32
     -- let ha = trace distinct_values
     -- let ha = trace counts
     -- let ha = trace (length distinct_values, length counts)
+    -- let upper_bounds =
+    --   find_bounds distinct_values counts (num_bins-1u16) (n-na_cnt) min_data_bin zero_cnt
     let upper_bounds =
-      find_bounds distinct_values counts (num_bins-1u16) (n-na_cnt) min_data_bin zero_cnt
+      find_bounds neg pos (num_bins-1u16) (n-na_cnt) min_data_bin zero_cnt
     let upper_bounds = upper_bounds ++ [f32.nan]
     in
     upper_bounds
@@ -264,7 +264,7 @@ let binMap [n] (vals: [n]f32) (num_bins: u16) : ([]u16, []f32) =
 
 
 let ha =
-  let he = binMap woopdata[:,0] 10
+  let he = binMap woopdata[:,0] 5
   in
   (he.0, he.1, value_to_bin f32.nan he.1 10)
 let main [n][d] (data: [n][d]f32) (labels: [n]f32) =
@@ -322,3 +322,45 @@ let main [n][d] (data: [n][d]f32) (labels: [n]f32) =
     --     (distinct_values with [offset] = 0f32, counts with [offset] = i32.i64 zero_cnt, offset+1)
     --   else
     --     (distinct_values, counts, offset)
+--let (neg_count) = partition (<= -zero_thres) distinct_values |> (.0) |> length
+  -- let (neg_counts, neg_values) = map (<= -zero_thres) distinct_values |> zip counts
+  --                          |> filter (.1) |> unzip
+  -- let (negs, zero_plus) = zip distinct_values counts |> partition (\x -> x.0 <= -zero_thres)
+  -- let (zeros, pos) = partition (\x -> x.0 <= zero_thres) zero_plus
+  -- let (pos_counts, pos_b) = map (>= -zero_thres) distinct_values |> zip counts
+  --                          |> filter (.1) |> unzip
+  --let split_i_pos = map i32.bool pos_counts |> i32.sum |> (\t -> i32.i64 l-t-1) -- need off by one?
+  
+            -- --let ha = trace (cur_in_bin, bin_cnt, mean_bin_size)
+            -- let (upper_bounds, lower_bounds, bin_cnt, cur_in_bin, mean_bin_size, rest_bin_cnt) =
+            --   if is_big_count[i] || (f32.i64 cur_in_bin >= mean_bin_size) ||
+            --      (is_big_count[i+1] && f32.i64 cur_in_bin >= f32.max 1f32 (mean_bin_size*0.5)) then
+            --     if (bin_cnt == max_bin-2) then -- last update then "break" by just looping no-ops.
+            --       let upper_bounds = upper_bounds with [bin_cnt] = distinct_values[i]
+            --       let bin_cnt = bin_cnt+1
+            --       --let ha = trace (bin_cnt, lower_bounds)
+            --       let lower_bounds = lower_bounds with [bin_cnt] = distinct_values[i+1]
+            --       --let ha = trace (lower_bounds, upper_bounds)
+            --       in
+            --         (upper_bounds, lower_bounds, bin_cnt, cur_in_bin, mean_bin_size, rest_bin_cnt)
+            --     else if (bin_cnt < max_bin-2) then
+            --       let upper_bounds = upper_bounds with [bin_cnt] = distinct_values[i]
+            --       let bin_cnt = bin_cnt+1
+            --       let lower_bounds = lower_bounds with [bin_cnt] = distinct_values[i+1]
+            --       let cur_in_bin = 0
+            --       let (rest_bin_cnt, mean_bin_size) =
+            --         if !is_big_count[i] then
+            --           (rest_bin_cnt-1, f32.i64 rest_sample_cnt / f32.i64 (rest_bin_cnt-1))
+            --         else
+            --           (rest_bin_cnt, mean_bin_size)
+            --       in
+            --         (upper_bounds, lower_bounds, bin_cnt, cur_in_bin, mean_bin_size, rest_bin_cnt)
+            --     else
+            --         (upper_bounds, lower_bounds, bin_cnt, cur_in_bin, mean_bin_size, rest_bin_cnt)
+            --         -- do nothing
+            --   else
+            --     (upper_bounds, lower_bounds, bin_cnt, 
+            --      cur_in_bin, mean_bin_size, rest_bin_cnt) -- do nothing
+            -- in
+            --   (upper_bounds, lower_bounds, bin_cnt, rest_sample_cnt,
+            --    cur_in_bin, mean_bin_size, rest_bin_cnt)
