@@ -57,7 +57,7 @@ let search_splits_feature [n] (data_points: [n]f32) (gis: [n]f32) (his: [n]f32)
                           : (f32, f32, bool) =
   let data = zip3 data_points gis his
   -- split for NaN entries
-  let (missing, rest) = partition (\x -> f32.nan == x.0) data
+  let (missing, rest) = partition (\x -> f32.isnan x.0) data
   let (_, miss_g, miss_h) = unzip3 missing
   let missing_gis_sum = reduce (+) 0f32 miss_g
   let missing_his_sum = reduce (+) 0f32 miss_h
@@ -248,5 +248,5 @@ let train [n][d] (data: [n][d]f32) (labels: [n]f32) (max_depth: i64) (n_rounds: 
           
 --let eval = train data[:,:2] data[:,2] 3 3 0.5 0.3 0
              
-let main [n][d] (data: [n][d]f32) (labels: [n]f32) = train data labels 3 100 0.5 0.3 0
+let main [n][d] (data: [n][d]f32) (labels: [n]f32) = train data labels 3 200 0.5 0.3 0
 let test = train woopdata wooptarget 3 6 0.5 0.3 0
