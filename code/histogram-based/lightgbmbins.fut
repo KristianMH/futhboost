@@ -11,22 +11,43 @@ let greedyFindBin [l] (distinct_values: [l]f32) (counts: [l]i64)
   let bin_upper_bounds = replicate max_bin f32.lowest
   let ha = trace (max_bin, l, total_num_samples)
   let (bin_upper_bounds, offset) =
-    if (l <= max_bin) then
-      let (new_bounds, _, new_offset) = 
-        loop (upper_bounds, cur_in_bin, offset) = (bin_upper_bounds, 0, 0) for i < l-1 do
-          let cur_in_bin = cur_in_bin + counts[i]
-          in
-            if cur_in_bin >= min_data_bin then
-              let value = (distinct_values[i]+distinct_values[i+1])/2f32
-              in
-                if (offset == 0) || (upper_bounds[offset] <= value) then
-                  (upper_bounds with [offset] = value, 0, offset+1)
-                else
-                  (upper_bounds, cur_in_bin, offset)
-            else
-              (upper_bounds, cur_in_bin, offset)
-      in
-        (new_bounds with [new_offset]= f32.highest, new_offset+1)
+    if l == 0 then
+      (bin_upper_bounds with [0]=f32.highest, 1)
+    else if (l <= max_bin) then
+      let possible_splits = map (\x-> f32.i64 x / f32.i64 min_data_bin) (init counts)
+      let possible_splits = scan (+) 0f32 possible_splits
+      let ha = l-1
+      let possible_splits = map (>= 1f32) possible_splits :> [ha]bool
+      let vals = map (\i -> (distinct_values[i]+distinct_values[i+1])/2f32) (iota ha)
+      let tmp = map3 (\c v i -> if c then
+                                  if i == 0 then
+                                    (v, i)
+                                  else
+                                  if vals[i-1] <= v then
+                                    (v, i)
+                                   else
+                                     (vals[i-1], i-1)
+                                else
+                                  (v, -1)) possible_splits vals (iota ha)
+      let (bounds, idxs) = unzip tmp
+      let new_offset = i64.max 0 (i64.maximum idxs) + 1
+      let new_bounds = scatter bin_upper_bounds idxs bounds
+    -- if l <= max_bin then
+    --   let (new_bounds, _, new_offset) = 
+    --     loop (upper_bounds, cur_in_bin, offset) = (bin_upper_bounds, 0, 0) for i < l-1 do
+    --       let cur_in_bin = cur_in_bin + counts[i]
+    --       in
+    --         if cur_in_bin >= min_data_bin then
+    --           let value = (distinct_values[i]+distinct_values[i+1])/2f32
+    --           in
+    --             if (offset == 0) || (upper_bounds[offset] <= value) then
+    --               (upper_bounds with [offset] = value, 0, offset+1)
+    --             else
+    --               (upper_bounds, cur_in_bin, offset)
+    --         else
+    --           (upper_bounds, cur_in_bin, offset)
+    in
+      (new_bounds with [new_offset]= f32.highest, new_offset+1)
     else
       let max_bin = if min_data_bin > 0 then
                     let max_bin = i64.min max_bin total_num_samples/min_data_bin
@@ -93,26 +114,29 @@ let greedyFindBin [l] (distinct_values: [l]f32) (counts: [l]i64)
       --let ha = trace lower_bounds
       --let he = trace upper_bounds
       --let bin_cnt = bin_cnt +1
-      -- let vals = map (\i -> if i == (max_bin-1) then
-      --                         f32.highest
-      --                       else
-      --                         (upper_bounds[i] + lower_bounds[i+1])/2f32) (iota bin_cnt)
-      -- let flags = map2 (\v v1 -> !(v >= v1)) (rotate (-1) vals) vals
-      -- let bin_upper_bounds = zip vals flags |> filter (.1) |> unzip |> (.0)
+      let vals = map (\i -> (upper_bounds[i] + lower_bounds[i+1])/2f32) (iota (bin_cnt))
+      --let ha = trace vals
+      let cs = map (\i -> i == 0 || i == (bin_cnt-1) || !(vals[i] > vals[i+1])) (iota (bin_cnt))
+      --let ha = trace cs
+      --let idxs = scan (+) 0 (map i64.bool cs)
+      let idxs = map2 (\i c -> if c then i else -1) (iota bin_cnt) cs
+      let offset = i64.maximum idxs +1
+      -- let ha = trace (idxs, vals)
+      let bin_upper_bounds = scatter bin_upper_bounds idxs vals
       -- in
       -- (bin_upper_bounds, length bin_upper_bounds)
-      let (bin_upper_bounds, offset) =
-        loop (bin_upper_bounds, offset) = (bin_upper_bounds, 0) for i < bin_cnt do
-          let value = (upper_bounds[i] + lower_bounds[i+1])/2f32
-          in
-            if (offset == 0) || !(bin_upper_bounds[offset] >= value) then -- maybe just >?
-              (bin_upper_bounds with [offset] = value, offset+1)
-            else
-              (bin_upper_bounds, offset)
-      --let ha = trace (offset, max_bin, bin_upper_bounds)
-      let bin_upper_bounds = bin_upper_bounds with [offset] = f32.highest
+      -- let (bin_upper_bounds, offset) =
+      --   loop (bin_upper_bounds, offset) = (bin_upper_bounds, 0) for i < bin_cnt-1 do
+      --     let value = (upper_bounds[i] + lower_bounds[i+1])/2f32
+      --     in
+      --       if (offset == 0) || !(bin_upper_bounds[offset] > value) then
+      --         (bin_upper_bounds with [offset] = value, offset+1)
+      --       else
+      --         (bin_upper_bounds, offset)
+      --let ha = trace (bin_upper_bounds)
+      let bin_upper_bounds = bin_upper_bounds with [offset+1] = f32.highest
       in
-      (bin_upper_bounds, offset+1)
+      (bin_upper_bounds, offset+2)
   
   in
   (bin_upper_bounds, offset)
@@ -135,24 +159,25 @@ let find_bounds [n][m] (negs: [n](f32, i64)) (pos: [m](f32, i64)) (num_bins: u16
   --                     m+1
   --                   else
   --                     split_i_neg
-  let split_i_neg =
-    let max ((d1,i1): (f32, i64)) ((d2,i2): (f32, i64)) =
-      if d1 > -zero_thres && d2 > -zero_thres then (d1, i1)
-      else if d1 > -zero_thres then (d1, i1)
-      else if d2 > -zero_thres then (d2, i2)
-      else (d1, i1)
-    in
-    reduce_comm max (f32.lowest, -1) (zip neg_values (iota n)) |> (.1)
-  let split_i_neg = if split_i_neg < 0 then
-                      m+1
-                    else
-                      split_i_neg
-  let split_i_pos = split_i_neg + 1 -- why split_i_pos?
+  -- let split_i_pos =
+  --   let max ((d1,i1): (f32, i64)) ((d2,i2): (f32, i64)) =
+  --     if d1 > zero_thres && d2 > zero_thres then (d1, i1)
+  --     else if d1 > -zero_thres then (d1, i1)
+  --     else if d2 > -zero_thres then (d2, i2)
+  --     else (d1, i1)
+  --   in
+  --   reduce_comm max (f32.lowest, -1) (zip pos_values (iota m)) |> (.1)
+  -- let split_i_neg = if split_i_neg < 0 then
+  --                     n+1
+  --                   else
+  --                     split_i_neg
+  let split_i_neg = n
+  let split_i_pos = m
   let left_max_bin = 
     i64.f32 ((f32.i64 num_neg_samples)/(f32.i64 (total_num_samples-zero_cnt)) *f32.u16 (num_bins-1))
   --let ha = trace left_max_bin
   let left_max_bin = i64.max 1 left_max_bin
-  --let hehe = trace (split_i_neg, num_bins)
+  let hehe = trace (split_i_neg, num_bins)
   let (upper_bounds, neg_offset) =
     if (split_i_neg > 0) && (num_bins > 1) then
       -- bin upper bounds
@@ -169,7 +194,7 @@ let find_bounds [n][m] (negs: [n](f32, i64)) (pos: [m](f32, i64)) (num_bins: u16
   let right_max_bin = i64.u16 num_bins - 1 - neg_offset -- offset == length upper_bounds?!!
   let ha = trace(right_max_bin, split_i_pos)
   let (rest_upper_bounds, offset) = 
-    if (split_i_pos >= 0) && (right_max_bin > 0) then
+    if (split_i_pos > 0) && (right_max_bin > 0) then
       let (new_bounds, offset) =
         greedyFindBin pos_values pos_counts right_max_bin num_pos_samples min_data_bin
       in
@@ -179,11 +204,11 @@ let find_bounds [n][m] (negs: [n](f32, i64)) (pos: [m](f32, i64)) (num_bins: u16
       -- add limit = infinity (f32.max)
       ([f32.highest], 1)
 
-  let ha = trace (rest_upper_bounds, offset)
+  --let ha = trace (rest_upper_bounds, offset)
   --let final_bounds = upper_bounds ++ [-zero_thres] ++ rest_upper_bounds[:offset]
   in
-  if length upper_bounds > 0 then
-    if (split_i_pos >= 0) && (right_max_bin > 0) then
+  if (neg_offset) > 0 then
+    if (split_i_pos > 0) && (right_max_bin > 0) then
       upper_bounds[:neg_offset-1] ++ [-zero_thres] ++ [zero_thres] ++ rest_upper_bounds[:offset]
     else
       upper_bounds[:neg_offset-1] ++ [-zero_thres] ++ [f32.highest]
@@ -243,7 +268,9 @@ let value_to_bin [n] (value: f32) (bin_bounds: [n]f32) (num_bins: u16) : u16 =
       loop (l, r) = (l, r) while l < r do
         let m = (r+l-1)/2
         in
-          if i64.u16 m >= n || (value <= bin_bounds[i64.u16 m]) then
+        if i64.u16 m >= n then
+          (r-1, 0)
+          else if (value <= bin_bounds[i64.u16 m]) then
             (l, m)
           else
             (m+1, r)
@@ -254,19 +281,25 @@ let value_to_bin [n] (value: f32) (bin_bounds: [n]f32) (num_bins: u16) : u16 =
 
 let binMap [n] (vals: [n]f32) (num_bins: u16) : ([]u16, []f32) =
   let bounds = findBin vals num_bins
-  let vals= radix_sort_float f32.num_bits f32.get_bit vals
+  --let vals= radix_sort_float f32.num_bits f32.get_bit vals
   let mapped = map (\v -> value_to_bin v bounds num_bins) vals
-  let numms = reduce_by_index (replicate (i64.u16 num_bins) 0u16) (+) 0u16 (map i64.u16 mapped) (replicate n 1u16)
+  let numms = reduce_by_index (replicate (i64.u16 num_bins) 0) (+) 0 (map i64.u16 mapped) (replicate n 1)
   -- let numms = mapped
   in
     (numms, bounds)
 
 
-
-let ha =
-  let he = binMap woopdata[:,0] 5
+let unique (vals: []f32) =
+  let sorted = radix_sort_float f32.num_bits f32.get_bit vals
+  let cs = map2 (!=) sorted (rotate (-1) sorted)
   in
-  (he.0, he.1, value_to_bin f32.nan he.1 10)
+  map i32.bool cs |> i32.sum
+
+  
+let ha =
+  let he = binMap woopdata[:,2] 256
+  in
+  (he.0, he.1, length he.1, u16.sum he.0)
 let main [n][d] (data: [n][d]f32) (labels: [n]f32) =
   let row = data[:, 0]
   let he = binMap row 10u16
