@@ -1,11 +1,11 @@
 bins_data:
-	python gen_bins_data.py
+	python3 gen_bins_data.py
 
 partition_data:
-	python gen_partition_data.py
+	python3 gen_partition_data.py
 
 histogram_data:
-	python gen_histogram_data.py
+	python3 gen_histogram_data.py
 
 bins_bench_c: bins_data bins_bench.fut
 	futhark bench --backend=c \
@@ -78,7 +78,7 @@ partition_test: partition_data partition_test.fut
 
 
 plot_bins_bench_ele: jsons/bins_bench_ele_cuda.json jsons/bins_bench_ele_opencl.json
-	python plot_jsons.py jsons/bins_bench_ele_cuda.json jsons/bins_bench_ele_opencl.json \
+	python3 plot_jsons.py jsons/bins_bench_ele_cuda.json jsons/bins_bench_ele_opencl.json \
 	       10 bins_bench_ele
 
 # plot_bins_bench_bins: jsons/bins_bench_bins_cuda.json jsons/bins_bench_segs_bins.json
@@ -86,19 +86,19 @@ plot_bins_bench_ele: jsons/bins_bench_ele_cuda.json jsons/bins_bench_ele_opencl.
 # 	       2 bins_bench_bins
 
 plot_partition_bench_ele: jsons/partition_bench_ele_cuda.json jsons/partition_bench_ele_opencl.json
-	python plot_jsons.py jsons/partition_bench_ele_cuda.json jsons/partition_bench_ele_opencl.json \
+	python3 plot_jsons.py jsons/partition_bench_ele_cuda.json jsons/partition_bench_ele_opencl.json \
            10 partition_bench_ele
 
 plot_partition_bench_segs: jsons/partition_bench_segs_cuda.json jsons/partition_bench_segs_opencl.json
-	python plot_jsons.py jsons/partition_bench_segs_cuda.json jsons/partition_bench_segs_opencl.json \
+	python3 plot_jsons.py jsons/partition_bench_segs_cuda.json jsons/partition_bench_segs_opencl.json \
            2 partition_bench_segs
 
 plot_histogram_bench_ele: jsons/histogram_bench_ele_cuda.json jsons/histogram_bench_ele_opencl.json
-	python plot_jsons.py jsons/histogram_bench_ele_cuda.json jsons/histogram_bench_ele_opencl.json \
+	python3 plot_jsons.py jsons/histogram_bench_ele_cuda.json jsons/histogram_bench_ele_opencl.json \
            10 histogram_bench_ele
 
 plot_histogram_bench_segs: jsons/histogram_bench_segs_cuda.json jsons/histogram_bench_segs_opencl.json
-	python plot_jsons.py jsons/histogram_bench_segs_cuda.json jsons/histogram_bench_segs_opencl.json \
+	python3 plot_jsons.py jsons/histogram_bench_segs_cuda.json jsons/histogram_bench_segs_opencl.json \
            2 histogram_bench_segs
 
 all:clean
