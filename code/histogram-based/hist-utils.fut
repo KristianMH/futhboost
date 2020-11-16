@@ -140,10 +140,10 @@ let search_splits_segs [d][s][m] (g_hists: [d][s][m]f32) (h_hists: [d][s][m]f32)
 -- num_bins: number of bins
 -- returns [d][num_nodes][num_bins] of gradient and hessian sums
 let create_histograms [n][d] (data: [n][d]u16) (gis: [n]f32) (his: [n]f32)
-                      (flag_arr: [n]i64) (num_segs: i64) (num_bins: i64)
+                      (flag_arr: [n]u16) (num_segs: i64) (num_bins: i64)
                       : ([d][num_segs][num_bins]f32, [d][num_segs][num_bins]f32) =
   -- flat_offsets for reduce by index
-  let seg_offsets = scan (+) 0i64 flag_arr |> map (\x -> (x-1)*num_bins)
+  let seg_offsets = scan (+) 016 flag_arr |> map (\x -> x-1) |> map (\x -> i64.u16 x *num_bins)
   in
    map (\dim_bins ->
           let idxs = map i64.u16 dim_bins |> map2 (+) seg_offsets

@@ -22,6 +22,7 @@ let get_bin_bounds [n] (vals: [n]f32) (b: i64) (n_ele: i64) (rest: i64): [b]binb
                                    ((vals[i-1]+vals[i-1])/2.0)) upper_bounds_idx
   in
   zip lower_bounds upper_bounds
+
   --map2 (\l u-> (vals[l], vals[u])) (lower_bounds_idx) (upper_bounds_idx)
   -- map2 (\l u-> if u == (n-1) then
   --         (vals[l], vals[u]*2.0)
