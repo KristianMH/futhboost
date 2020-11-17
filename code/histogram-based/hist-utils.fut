@@ -162,6 +162,7 @@ let create_histograms [n][d] (data: [n][d]u16) (gis: [n]f32) (his: [n]f32)
   -- flat_offsets for reduce by index
   let seg_offsets = scan (+) 0u16 flag_arr |> map (\x -> x-1) |> map (\x -> (i64.u16 x) *num_bins)
   -- seg_offsets are multiplied with #num_bins to fit flat representation
+
   in
    map (\dim_bins ->
           let idxs = map i64.u16 dim_bins |> map2 (+) seg_offsets
