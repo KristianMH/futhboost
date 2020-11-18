@@ -1,95 +1,130 @@
 import "../lib/github.com/diku-dk/sorts/radix_sort"
 import "../lib/github.com/diku-dk/segmented/segmented"
 import "../util"
+import "woop"
 
-type binboundaries = (f32, f32) -- min max element in bin
 
 
--- assumes vals are sorted!
--- implement so they upper bounds match xgboost technique? n + (n+1) and 2*n at bound
-let get_bin_bounds [n] (vals: [n]f32) (b: i64) (n_ele: i64) (rest: i64): [b]binboundaries =
-  let bin_sizes = replicate b n_ele
-  let lower_bounds_idx = scanExc (+) 0 bin_sizes 
-  -- let upper_bounds_idx = rotate 1 lower_bounds_idx 
-  -- let upper_bounds_idx = map2 (\l u -> if u <= l then
-  --                                        l+n_ele+rest-1 else -- fix for last bin or single_bin
-  --                                        u-1) lower_bounds_idx upper_bounds_idx
-  let lower_bounds = map (\i -> vals[i]) lower_bounds_idx
-  let upper_bounds_idx = rotate 1 lower_bounds_idx
-  let upper_bounds = map (\i -> if i==0 then
-                                   vals[n-1]*2
-                                 else
-                                   ((vals[i-1]+vals[i-1])/2.0)) upper_bounds_idx
+-- assumes data is sorted
+-- given [n] valus then it does equal frequency binning with num_bins-1 as it reserves last bin for
+-- na values.
+-- if num_unique < bins_left then it simply inserts split values
+-- else it searches for split between values
+let findBins [n][m] (vals: [n]f32) (num_bins: u16) (dest: *[m]f32): [m]f32 =
+  let (na, rest) = partition (f32.isnan) vals
+  -- count non-na values and na-values
+  let num_values = length rest
+  let na_count = length na
+  -- flag array with true entries gives an unique segment start
+  let unique_start = map2 (!=) rest (rotate (-1) rest) :> [num_values]bool
+  let num_unique = map i64.bool unique_start |> i64.sum
+  -- compiler warning assertion
+  let rest = rest :> [num_values]f32
+  let distinct_values = segmented_reduce f32.max f32.lowest unique_start rest num_unique
+  -- count number of occurences of each unique value
+  let counts = segmented_reduce (+) 0 unique_start (replicate num_values 1i64) num_unique
+  let bins_left = num_bins-1 |> i64.u16
   in
-  zip lower_bounds upper_bounds
+    if num_unique <= bins_left then
+      -- less split_bounds then binds simply map split values
+      let vals = map (\i -> if i == (num_unique-1) then
+                              distinct_values[i]*2
+                            else
+                              (distinct_values[i]+distinct_values[i+1])/2.0)
+                     (iota num_unique)
+      in
+        (scatter dest (indices vals) vals) with [m-1]=f32.nan -- needed nan?
+    else
+      -- mean number of values in each bin
+      let mean_bin_size = f32.i64 (n-na_count) / f32.i64 bins_left
+      let sum_counts = scan (+) 0 counts
+      let tmp = map (\v -> f32.floor(f32.i64 v / mean_bin_size)) sum_counts
+      -- cannot split on first unique value and last value is always maximum
+      -- else splits are considered between values according to the cumulative counts
+      let split_points = map (\i -> if i == 0 then false
+                                    else if i == num_unique-1 then true
+                                    else tmp[i] != tmp[i-1]) (indices tmp)
+    -- number of splits accumulated, used for calculating distances
+    let num_splits = map i64.bool split_points |> scan (+) 0
+    -- returns nan for non splits
+    let split_vals =
+      map (\i ->
+             if i == (num_unique -1) then
+               distinct_values[i]
+             else if split_points[i] then
+                  let mean_sum = f32.i64 num_splits[i] * mean_bin_size
+                  let dist_right = mean_sum - f32.i64 sum_counts[i] |> f32.abs
+                  let dist_left = mean_sum - f32.i64 sum_counts[i-1] |> f32.abs
+                  in
+                    if f32.abs dist_left >= f32.abs dist_right then
+                      distinct_values[i-1]
+                    else
+                      distinct_values[i]
+             else
+               f32.nan
+          ) (indices split_points)
+    let active_split_vals = filter (\x -> !(f32.isnan x)) split_vals
+    --let ha = trace hehe
+    let xg_split_vals = map (\i -> if i == (length active_split_vals-1) then
+                                     2* active_split_vals[i] -- last split_val multiplied with 2.
+                                                         -- lightgbm does overflow handling? do?
+                                   else
+                                     (active_split_vals[i] + active_split_vals[i+1])/2.0 
+                   ) (indices active_split_vals)
+    in
+    (scatter dest (indices xg_split_vals) xg_split_vals) with [m-1] = f32.nan
 
-  --map2 (\l u-> (vals[l], vals[u])) (lower_bounds_idx) (upper_bounds_idx)
-  -- map2 (\l u-> if u == (n-1) then
-  --         (vals[l], vals[u]*2.0)
-  --       else
-  --         (vals[l], (vals[u]+vals[u+1])/2.0)) (lower_bounds_idx) (upper_bounds_idx)
-  -- faster with map map zip?
-
-
--- handle when n < b ?
--- assumes b > 0
-let binMap [n] (vals: [n]f32) (b: i64) : ([n]u16, [b]binboundaries) =
-  let dest = replicate n 0u16
-  let num_ele_in_bin = n / b
-  let rest = n % b
-  let index_arr = iota n --|> map u16.i64
-  let (s_vals, s_idx) = radix_sort_float_by_key (.0) f32.num_bits f32.get_bit
-                                       ( zip vals index_arr) |> unzip
-  let val_shape = replicate b num_ele_in_bin with [b-1] = num_ele_in_bin + rest
-  let bin_vals = replicated_iota val_shape n |> map u16.i64
-  let bin_bounds = get_bin_bounds s_vals b num_ele_in_bin rest
+let value_to_bin [n] (value: f32) (bin_bounds: [n]f32) (num_bins: u16) : u16 =
+  if f32.isnan value then
+     num_bins-1
+  else
+    -- first_true returns the idxs of first true. since last bin_bounds > max value then
+    -- in worst case it returns n-2 index as u16 assumes n <= u16.highest!
+    let (res, _) = map (value<) (init bin_bounds) |> first_true
+    --let ha = if !b then trace (value, bin_bounds) else (value, bin_bounds)
+    in
+    res
+               
+let binMap [n] (vals: [n]f32) (num_bins: i64) : ([n]u16, [num_bins]f32) =
+  let s_vals = radix_sort_float f32.num_bits f32.get_bit vals
+  let dest = replicate num_bins f32.highest
+  let num_bins = u16.i64 num_bins
+  let new_bounds = findBins s_vals num_bins dest
+  let mapped = map (\v -> value_to_bin v new_bounds num_bins) vals
   in
-  (scatter dest s_idx bin_vals, bin_bounds)
-  -- scatter dest s_idx bin_vals
+  (mapped, new_bounds)
 
---let a = [10.3f32, 9.32, 4.32, 3.0, 100.3, 304.3]
+let ha =
+  let (_, b) = map (\r -> binMap r 10) (transpose woopdata) |> unzip
+  in b
+  
+let main [n][d] (data: [n][d]f32) (labels: [n]f32) =
+  let (_, b) = map (\r -> binMap r 10) (transpose data) |> unzip
+  in b
+--   let (data_b, bin_bounds) = map (\r -> let rs = radix_sort_float f32.num_bits f32.get_bit r
+--                                         in
+--                                         binMap rs 10i64) (transpose data) |> unzip
+--   in
+--   bin_bounds               
+    --let t = trace (haha, split_points, sum_counts, mean_bin_size)
+    --let haha = zip3 split_points distinct_values sum_counts |> filter (.0)
 
-
--- tests binMap
--- ==
--- entry: binMap_test
--- input { [1.1f32, -3.2, 100.3, 20.3, 10.4, 39.2, 304.3, 7.0, -10.3, 3.3] 3i64}
--- output {[0i64, 0, 2, 2, 1, 2, 2, 1, 0, 1]}
--- input { [1.0f32, 2.3, 42.1, 249.2, -100.0] 2i64}
--- output {[0i64, 1, 1, 1, 0]}
--- input {[10.3f32, 9.32, 4.32, 3.0, 100.3, 304.3] 1i64}
--- output {[0i64, 0, 0, 0, 0, 0]}
-entry binMap_test (vals: []f32) (b: i64) =
-  (binMap vals b).0
-
--- ==
--- entry: binMap_test_lower_bounds
--- input { [1.1f32, -3.2, 100.3, 20.3, 10.4, 39.2, 304.3, 7.0, -10.3, 3.3] 3i64}
--- output {[-10.3f32, 3.3, 20.3]}
--- input {[1.0f32, 2.3, 42.1, 249.2, -100.0] 2i64}
--- output {[-100.0f32, 2.3]}
-entry binMap_test_lower_bounds (vals: []f32) (b: i64) =
-  (binMap vals b).1 |> unzip |> (.0)
-
--- ==
--- entry: binMap_test_upper_bounds
--- input { [1.1f32, -3.2, 100.3, 20.3, 10.4, 39.2, 304.3, 7.0, -10.3, 3.3] 3i64}
--- output {[1.1f32, 10.4, 304.3]}
--- input {[1.0f32, 2.3, 42.1, 249.2, -100.0] 2i64}
--- output {[1.0f32, 249.2]}
-entry binMap_test_upper_bounds (vals: []f32) (b: i64) =
-  (binMap vals b).1 |> unzip |> (.1)
-
-
-
-
-
-
-
-
-
-
--- inplace update wanted to last element instead.
--- let upper_bounds_idx = rotate 1 lower_bounds_idx
---                            with [b-1] = lower_bounds_idx[b-1] + n_ele + rest
---let upper_bounds_idx = map (\t -> t -1) upper_bounds_idx
+    -- let hehe = map (\i -> if i == length haha - 1 then
+    --                         haha[i].1
+    --                       else
+    --                       let mean_sum = f32.i64 (i+1)*mean_bin_size
+    --                       let dist_left = f32.i64 haha[i].2 - mean_sum |> f32.abs
+    --                       let dist_right = f32.i64 haha[i+1].2 - mean_sum |> f32.abs
+    --                       in
+    --                       if dist_left >= dist_right then haha[i].1 else haha[i+1].1
+    --                    ) (indices haha)
+    
+    -- let hehe = map (\i -> if i == length haha - 1 then
+    --                         haha[i].1
+    --                       else
+    --                       let mean_sum = f32.i64 (i+1)*mean_bin_size
+    --                       let dist_left = f32.i64 haha[i].2 - mean_sum |> f32.abs
+    --                       let dist_right = f32.i64 haha[i+1].2 - mean_sum |> f32.abs
+    --                       in
+    --                       if dist_left >= dist_right then haha[i].1 else haha[i+1].1
+    --                    ) (indices haha)

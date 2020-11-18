@@ -43,6 +43,20 @@ let arg_max [n] (xs: [n]f32): (i64,f32) =
         else (i2,d2)
     in reduce_comm max (i64.lowest,f32.lowest) (zip ((iota n)) xs)
 
+
+let first_true [n] (xs: [n]bool) =
+  let max ((i1, c1): (u16, bool)) ((i2, c2): (u16, bool)) : (u16, bool) =
+    if c1 && c2 then
+      (u16.min i1 i2, c1)
+    else if c1 then
+           (i1, c1)
+    else if c2 then
+           (i2, c2)
+    else
+      (i1, c1)
+  in
+  reduce_comm max (u16.highest, false) (zip (indices xs |> map u16.i64) xs)
+
 -- creates flag array with shape defined by shp and values val
 -- r is to specify returned length to handle compiler warnings.
 let mkFlagArray 't [m] 

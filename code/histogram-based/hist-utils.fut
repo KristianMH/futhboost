@@ -55,6 +55,7 @@ let find_split_hist [m] (g_hist: [m]f32) (h_hist: [m]f32) --(bin_bounds: [m]binb
                         : (f32, u16, bool, node_vals, node_vals) =
   -- if m == 1? handle
   let na_gis_sum = last g_hist
+  --let na_gis_sum = if na_gis_sum != 0.0 then trace na_gis_sum else na_gis_sum
   let na_his_sum = last h_hist
   let n = m-1
   let gls = scan (+) 0.0 (init g_hist) :> [n]f32
@@ -125,7 +126,7 @@ let search_splits_segs [d][s][m] (g_hists: [d][s][m]f32) (h_hists: [d][s][m]f32)
                  seg_g_hist seg_h_hist g_node h_node 
          ) g_hists h_hists :> [d][s](f32, u16, bool, node_vals, node_vals)--bin_bounds 
   let (gains, split_vals, missing_dirs, left_nodes, right_nodes) = map unzip5 best_splits_dim |> unzip5
-  --let ha = trace gains
+  let ha = map trace gains
   let dim_mat = map (\i -> replicate s i ) (iota d)
   let seg_mat = replicate d (iota s)
   -- find best splits for each seg(node) in each dim
@@ -176,3 +177,20 @@ let create_histograms [n][d] (data: [n][d]u16) (gis: [n]f32) (his: [n]f32)
               )
        ) (transpose data)  --:> [d]( [num_segs][b]f32, [num_segs][b]f32 ) ) |> unzip
    |> unzip
+
+
+
+-- special partition2D only returns true values for 2D array
+let partition2D_true [n][d] 't (data: [n][d]t) (conds: [n]bool) : [][d]t =
+  -- u16 since "limit" of tree heigh of 16
+  let true_idxs = map u16.bool conds |> scan (+) 0u16 -- most likely fused all together tho
+  let num_true = last true_idxs
+  in
+  if num_true == 0 then
+    []
+  else
+    let idxs = map2 (\c i -> if c then i64.u16 i-1 else -1i64) conds true_idxs
+    let ne = head (head data)
+    let num_true = i64.u16 num_true
+    in
+      scatter2D (replicate num_true (replicate d ne)) idxs data

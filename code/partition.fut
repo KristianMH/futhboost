@@ -41,7 +41,7 @@ let partition_lifted [n][l][d] 't (conds: [l](i64, t)) (ne: t) (op: t -> t -> bo
 -- op: comparison operator
 -- shp: number of elements in each segment
 -- vals: values to split
--- Returns: index permutation to split data and split indicies for each segment
+-- Returns: index scatter permutation to split data and split indicies for each segment
 -- along with boolean values -- should remove boolean values?
 let partition_lifted_idx [n][l][d] 't (conds: [l](i64, t)) (ne: t) (op: t -> t -> bool) (shp: [l]i64)
                                   (vals: [n][d]t) : ([n]i64, [l]i64, [n]bool) =

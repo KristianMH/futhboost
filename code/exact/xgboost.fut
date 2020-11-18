@@ -171,7 +171,7 @@ let train_round [n][d] (data: [n][d]f32) (labels: [n]f32) (preds: [n]f32) (max_d
                   -- split needed. write node into tree and cond for splitting
                   let split_val = vals[best_split_dim]
                   let missing_dir = dirs[best_split_dim]
-                  let node = (best_split_dim, split_val, true, missing_dir)
+                  let node = (best_split_dim, split_val, missing_dir, true)
                   let new_conds = conds with [j] = (best_split_dim, split_val)
                   in
                     (node, new_conds)
@@ -194,6 +194,8 @@ let train_round [n][d] (data: [n][d]f32) (labels: [n]f32) (preds: [n]f32) (max_d
       let flag_arr = mkFlagArray shp 0u16 1u16 active_points_length
       let seg_offsets = scan (+) 0u16 flag_arr |> map (\t -> t-1u16)
       -- find active data, gis, his
+      -- if filter uses scatter, consider move data into permute2D
+      -- where idxs are constructed with scatter albeit in fusion with gis his scatter op?
       let (active_data, active_gis, active_his, _) =
         zip4 data gis his seg_offsets |>
         filter (\x -> let idx = i64.u16 x.3 in active_node_flags[idx]) |>
