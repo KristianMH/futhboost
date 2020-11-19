@@ -98,8 +98,13 @@ let train_round [n][d][b] (data: [n][d]u16) (bin_bounds: [d][b]f32)
                 ) active_splits
           let tree_full = scatter tree_terminal (map (\x -> x-1) active_nodes) new_entries
           let conds = map (\x -> (x.0, x.1+1)) active_splits
-          let (new_data, new_gis, new_his, split_shape) =
-            partition_lifted_by_vals conds 0u16 (<) active_shp data gis his
+          -- let (new_data, new_gis, new_his, split_shape) =
+          -- partition_lifted_by_vals conds 0u16 (<) active_shp data gis his
+          let (permutation_idx, split_shape) =
+            partition_lifted_idx conds (<) active_shp data
+          let new_data = permute2D data  permutation_idx
+          let (new_gis, new_his) = permute (zip gis his) permutation_idx |> unzip
+          
           let num_nodes = 2* length active_shp
           let new_shp = calc_new_shape active_shp split_shape :> [num_nodes]i64
           -- let ha = trace new_shp

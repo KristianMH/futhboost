@@ -24,11 +24,14 @@ let partition_lifted [n][l][d] 't (conds: [l](i64, t)) (ne: t) (op: t -> t -> bo
   let false_offsets = segmented_scan (+) 0 bool_flag_arr false_ints
   let seg_offsets = scanExc (+) 0 shp
   let num_true_in_segs = segmented_reduce (+) 0 bool_flag_arr true_ints l
-  --let num_false_in_segs = map2 (-) shp num_true_in_segs
-  let true_val_offsets = map2 (\x i -> x + seg_offsets[i]) true_offsets seg_offsets_idx
-  let false_val_offsets = map2 (\x i -> x + seg_offsets[i] + num_true_in_segs[i])
-                               false_offsets seg_offsets_idx
-  let idxs = map3 (\c iT iF -> if c then iT-1 else iF-1) cs true_val_offsets false_val_offsets
+
+  let true_val_offsets =
+    map2 (\x i -> x + seg_offsets[i]) true_offsets seg_offsets_idx
+  let false_val_offsets =
+    map2 (\x i -> x + seg_offsets[i] + num_true_in_segs[i])
+         false_offsets seg_offsets_idx
+  let idxs =
+    map3 (\c iT iF -> if c then iT-1 else iF-1) cs true_val_offsets false_val_offsets
   in
   (scatter2D (replicate n (replicate d ne)) idxs vals, num_true_in_segs)
 
@@ -42,28 +45,30 @@ let partition_lifted [n][l][d] 't (conds: [l](i64, t)) (ne: t) (op: t -> t -> bo
 -- shp: number of elements in each segment
 -- vals: values to split
 -- Returns: index scatter permutation to split data and split indicies for each segment
--- along with boolean values -- should remove boolean values?
-let partition_lifted_idx [n][l][d] 't (conds: [l](i64, t)) (ne: t) (op: t -> t -> bool) (shp: [l]i64)
-                                  (vals: [n][d]t) : ([n]i64, [l]i64, [n]bool) =
-  let flag_arr = mkFlagArray shp 0 1 n
-  let bool_flag_arr = map bool.i64 flag_arr
-  let seg_offsets_idx = scan (+) 0 flag_arr |> map (\x -> x-1)
-  let cs = map2 (\v i -> let (dim, cond_val) = conds[i]
+-- idea behind is this to return index permutation and save 2 replicate (1 2D!!) and use permute
+-- should save several memory write operations to memory. coalesed reading?!!
+let partition_lifted_idx [n][l][d] 't (conds: [l](i64, t)) (op: t -> t -> bool) (shp: [l]i64)
+                                  (vals: [n][d]t) : ([n]i64, [l]i64) =
+  let flag_arr = mkFlagArray shp 0u16 1u16 n
+  let bool_flag_arr = map bool.u16 flag_arr
+  let seg_offsets_idx = scan (+) 0u16 flag_arr |> map (\x -> x - 1u16)
+  let cs = map2 (\v i -> let (dim, cond_val) = conds[i64.u16 i]
                          in op v[dim] cond_val) vals seg_offsets_idx
-  --let ha = trace cs
   let true_ints = map i64.bool cs
   let false_ints = map (\x -> 1-x) true_ints
   let true_offsets = segmented_scan (+) 0 bool_flag_arr true_ints
   let false_offsets = segmented_scan (+) 0 bool_flag_arr false_ints
   let seg_offsets = scanExc (+) 0 shp
   let num_true_in_segs = segmented_reduce (+) 0 bool_flag_arr true_ints l
-  --let num_false_in_segs = map2 (-) shp num_true_in_segs
-  let true_val_offsets = map2 (\x i -> x + seg_offsets[i]) true_offsets seg_offsets_idx
-  let false_val_offsets = map2 (\x i -> x + seg_offsets[i] + num_true_in_segs[i])
-                               false_offsets seg_offsets_idx
-  let idxs = map3 (\c iT iF -> if c then iT-1 else iF-1) cs true_val_offsets false_val_offsets
+  let true_val_offsets =
+    map2 (\x i -> x + seg_offsets[i64.u16 i]) true_offsets seg_offsets_idx
+  let false_val_offsets =
+    map2 (\x i -> x + seg_offsets[i64.u16 i] + num_true_in_segs[i64.u16 i])
+         false_offsets seg_offsets_idx
+  let idxs =
+    map3 (\c iT iF -> if c then iT-1 else iF-1) cs true_val_offsets false_val_offsets
   in
-  (idxs, num_true_in_segs, cs)
+  (scatter (replicate n 1) idxs (iota n), num_true_in_segs)
 
 
 
@@ -90,11 +95,13 @@ let partition_lifted_by_vals [n][l][d] 't (conds: [l](i64, t)) (ne: t) (op: t ->
   let false_offsets = segmented_scan (+) 0 bool_flag_arr false_ints
   let seg_offsets = scanExc (+) 0 shp
   let num_true_in_segs = segmented_reduce (+) 0 bool_flag_arr true_ints l
-  --let num_false_in_segs = map2 (-) shp num_true_in_segs
-  let true_val_offsets = map2 (\x i -> x + seg_offsets[i64.u16 i]) true_offsets seg_offsets_idx
-  let false_val_offsets = map2 (\x i -> x + seg_offsets[i64.u16 i] + num_true_in_segs[i64.u16 i])
-                               false_offsets seg_offsets_idx
-  let idxs = map3 (\c iT iF -> if c then iT-1 else iF-1) cs true_val_offsets false_val_offsets
+  let true_val_offsets =
+    map2 (\x i -> x + seg_offsets[i64.u16 i]) true_offsets seg_offsets_idx
+  let false_val_offsets =
+    map2 (\x i -> x + seg_offsets[i64.u16 i] + num_true_in_segs[i64.u16 i])
+         false_offsets seg_offsets_idx
+  let idxs =
+    map3 (\c iT iF -> if c then iT-1 else iF-1) cs true_val_offsets false_val_offsets
   in
   (scatter2D (replicate n (replicate d ne)) idxs vals,
    scatter (replicate n 0f32) idxs gis,

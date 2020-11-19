@@ -200,8 +200,12 @@ let train_round [n][d] (data: [n][d]f32) (labels: [n]f32) (preds: [n]f32) (max_d
         zip4 data gis his seg_offsets |>
         filter (\x -> let idx = i64.u16 x.3 in active_node_flags[idx]) |>
         unzip4
-      let (new_data, new_gis, new_his, split_shape) =
-        partition_lifted_by_vals active_conds 0f32 (<) active_shp active_data active_gis active_his
+      -- let (new_data, new_gis, new_his, split_shape) =
+      --   partition_lifted_by_vals active_conds 0f32 (<) active_shp active_data active_gis active_his
+      let (permutation_idx, split_shape) =
+        partition_lifted_idx active_conds (<) active_shp active_data
+      let new_data = permute2D active_data  permutation_idx
+      let (new_gis, new_his) = permute (zip active_gis active_his) permutation_idx |> unzip
       -- get indices to split active data according to conditions found in active_conds
       -- let (idxs, split_shape, _) = partition_lifted_idx active_conds 0f32 (<) active_shp
       --                                                   active_data
