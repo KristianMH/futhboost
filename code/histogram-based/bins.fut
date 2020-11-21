@@ -94,13 +94,31 @@ let binMap [n] (vals: [n]f32) (num_bins: i64) : ([n]u16, [num_bins]f32) =
   in
   (mapped, new_bounds)
 
-let ha =
-  let (_, b) = map (\r -> binMap r 10) (transpose woopdata) |> unzip
-  in b
+let binMap_seq [n][d] (data: [n][d]f32) (b: i64)
+                      : ([n][d]u16, [d][b]f32) =
+  let data_b = replicate (n*d) 0u16
+  let bounds = replicate (d*b) 0f32
+  let (data_b, bounds) =
+    loop (data_b, bounds) = (data_b, bounds) for i < d do
+    let (data_entry, bound_entry) = binMap data[:,i] b
+    let offset_b = i*b
+    let offset_d = i*n
+    let data_offsets = iota n |> map (+offset_d)
+    let bound_offsets = iota b |> map (+offset_b)
+    in
+    (scatter data_b data_offsets data_entry,
+     scatter bounds bound_offsets bound_entry )
+  in
+  (unflatten n d data_b, unflatten d b bounds)
   
 let main [n][d] (data: [n][d]f32) (labels: [n]f32) =
-  let (_, b) = map (\r -> binMap r 10) (transpose data) |> unzip
-  in b
+  let b = 256
+  in
+  binMap_seq data b
+  -- let (d, b) = map (\r -> binMap r b) (transpose data) |> unzip
+  -- in (d,b)
+
+ 
 --   let (data_b, bin_bounds) = map (\r -> let rs = radix_sort_float f32.num_bits f32.get_bit r
 --                                         in
 --                                         binMap rs 10i64) (transpose data) |> unzip

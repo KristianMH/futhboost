@@ -77,10 +77,11 @@ let train_round [n][d][b] (data: [n][d]u16) (bin_bounds: [d][b]f32)
     	  -- let (gis', his') = unzip fin_arrs
 
           let data = partition2D_true data cs
-          let l = length data
-          let data = data :> [l][d]u16
+          --let data = zip data cs |> filter (.1) |> unzip |> (.0)
+          let l_act = length data
+          let data = data :> [l_act][d]u16
           let (act_arrs, fin_arrs) = partition (\x -> x.2) (zip3 gis his cs)
-          let (gis, his, _) = unzip3 act_arrs :> ([l]f32, [l]f32, [l]bool)
+          let (gis, his, _) = unzip3 act_arrs :> ([l_act]f32, [l_act]f32, [l_act]bool)
     	  let (gis', his', _) = unzip3 fin_arrs
 
     	  -- permute vs scatter performance?
@@ -125,11 +126,13 @@ let train_round [n][d][b] (data: [n][d]u16) (bin_bounds: [d][b]f32)
 -- Returns sqaured error between label and prediction
 let error (label: f32) (pred: f32) : f32 = (label-pred)**2
 
+
 let train [n][d] (data: [n][d]f32) (labels: [n]f32) (max_depth: i64) (n_rounds: i64)
                        (l2: f32) (eta: f32) (gamma: f32) : [n_rounds]f32 =
   let inital_preds = replicate n 0.5
-  let (data_b, bin_bounds) = map (\r -> binMap r 10i64) (transpose data) |> unzip
-  let data_b = transpose data_b
+  --let (data_b, bin_bounds) = map (\r -> binMap r 10i64) (transpose data) |> unzip
+  let (data_b, bin_bounds) = binMap_seq data 10
+  --let data_b = transpose data_b
   let results = replicate n_rounds 0.0f32
   --let ha = map (\i -> trace i) bin_bounds
   let res =
@@ -138,6 +141,7 @@ let train [n][d] (data: [n][d]f32) (labels: [n]f32) (max_depth: i64) (n_rounds: 
                   --:> [](i64, f32, bool, bool) data
       let new_preds = map (\x -> predict x tree) data |> map2 (+) preds 
       let train_error = reduce (+) 0.0 <| map2 (\l p -> error l p) labels new_preds
+      --let train_error = squared_error labels new_preds
       let train_error = f32.sqrt (train_error/ (f32.i64 n)) --|> trace
       let res1 = scatter e [i] [train_error]
       --let ha = trace train_error
@@ -146,8 +150,10 @@ let train [n][d] (data: [n][d]f32) (labels: [n]f32) (max_depth: i64) (n_rounds: 
   in
   res.3
           
-let main [n][d] (data: [n][d]f32) (labels: [n]f32) = train data labels 3 200 0.5 0.3 0
+let main [n][d] (data: [n][d]f32) (labels: [n]f32) = train data labels 6 100 0 0.1 0
 
+
+      
 let test = train woopdata wooptarget 3 1 0.5 0.3 0
 --let data_test = train data_test[:,:2] data_test[:,2] 3 1 0.5 0.3 0
 
