@@ -94,22 +94,23 @@ let binMap [n] (vals: [n]f32) (num_bins: i64) : ([n]u16, [num_bins]f32) =
   in
   (mapped, new_bounds)
 
-let binMap_seq [n][d] (data: [n][d]f32) (b: i64)
+let binMap_seq [n][d] (data: [d][n]f32) (b: i64)
                       : ([n][d]u16, [d][b]f32) =
-  let data_b = replicate (n*d) 0u16
-  let bounds = replicate (d*b) 0f32
+  let data_b = replicate d (replicate n 0u16)
+  let bounds = replicate d (replicate b 0f32)
   let (data_b, bounds) =
     loop (data_b, bounds) = (data_b, bounds) for i < d do
-    let (data_entry, bound_entry) = binMap data[:,i] b
-    let offset_b = i*b
-    let offset_d = i*n
-    let data_offsets = iota n |> map (+offset_d)
-    let bound_offsets = iota b |> map (+offset_b)
+    let (data_entry, bound_entry) = binMap data[i] b
+    -- let offset_b = i*b
+    -- let offset_d = i*n
+    -- let data_offsets = iota n |> map (+offset_d)
+    -- let bound_offsets = iota b |> map (+offset_b)
     in
-    (scatter data_b data_offsets data_entry,
-     scatter bounds bound_offsets bound_entry )
+    (scatter2D data_b [i] [data_entry],
+     scatter2D bounds [i] [bound_entry] )
   in
-  (unflatten n d data_b, unflatten d b bounds)
+  (transpose data_b, bounds)
+  --(unflatten n d data_b, unflatten d b bounds)
   
 let main [n][d] (data: [n][d]f32) (labels: [n]f32) =
   let b = 256

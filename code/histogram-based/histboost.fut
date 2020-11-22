@@ -57,32 +57,38 @@ let train_round [n][d][b] (data: [n][d]u16) (bin_bounds: [d][b]f32)
     	  -- splits should be [l_shp](i64, f32, bool, bool, node_vals, node_vals)
     	  -- (dim_idx, split_val, missing_dir, terminal_flag, left_node, right_node)
           let terminal_node_flags = map (.3) splits |> map (!)
-          --let ha = trace terminal_node_flags
-          --let ha = trace shp
-          let seg_idxs = scan (+) 0u16 flag_arr
-          let cs = map (\i -> let i = i64.u16 (i-1)  in terminal_node_flags[i]) seg_idxs
-          
-          --let (seg_i, shps_permute_idxs) = get_permute_idxs terminal_node_flags |> trace
-    	  --let (split_i, points_idxs) = get_permute_idxs cs
-          --let ha = trace (split_i, points_idxs)
-          let (active, terminal) = partition (\x -> !(x.2).3) (zip3 shp nodes splits)
-            --permute (zip3 shp nodes splits) shps_permute_idxs
-            --|> split seg_i
-          let (active_shp, active_nodes, active_splits) = unzip3 active
-          let (terminal_shp, terminal_nodes, _) = unzip3 terminal
-          -- permute is flawed!!, consider using scatter!
-          -- let (data, _) = permute2D data points_idxs |> split split_i
-    	  -- let (act_arrs, fin_arrs) = permute (zip gis his) points_idxs |> split split_i
-          -- let (gis, his) = unzip act_arrs
-    	  -- let (gis', his') = unzip fin_arrs
-
-          let data = partition2D_true data cs
-          --let data = zip data cs |> filter (.1) |> unzip |> (.0)
-          let l_act = length data
-          let data = data :> [l_act][d]u16
-          let (act_arrs, fin_arrs) = partition (\x -> x.2) (zip3 gis his cs)
-          let (gis, his, _) = unzip3 act_arrs :> ([l_act]f32, [l_act]f32, [l_act]bool)
-    	  let (gis', his', _) = unzip3 fin_arrs
+          let (terminal_shp, terminal_nodes, active_shp, active_splits, active_nodes,
+               data, gis, his, gis', his') =
+            if and terminal_node_flags then -- all nodes must be split.
+              ([], [], shp, splits, nodes, data, gis, his, [], [])
+            else if and (map (.3) splits) then -- all nodes are done.
+              (shp, nodes, [], [], [], [], [], [], gis, his)
+            else
+                 
+              let seg_idxs = scan (+) 0u16 flag_arr
+              let cs = map (\i -> let i = i64.u16 (i-1)  in terminal_node_flags[i]) seg_idxs
+              --let (seg_i, shps_permute_idxs) = get_permute_idxs terminal_node_flags |> trace
+    	      --let (split_i, points_idxs) = get_permute_idxs cs
+              --let ha = trace (split_i, points_idxs)
+              let (active, terminal) = partition (\x -> !(x.2).3) (zip3 shp nodes splits)
+               --permute (zip3 shp nodes splits) shps_permute_idxs
+               --|> split seg_i
+               let (active_shp, active_nodes, active_splits) = unzip3 active
+               let (terminal_shp, terminal_nodes, _) = unzip3 terminal
+               -- permute is flawed!!, consider using scatter!
+               -- let (data, _) = permute2D data points_idxs |> split split_i
+    	       -- let (act_arrs, fin_arrs) = permute (zip gis his) points_idxs |> split split_i
+               -- let (gis, his) = unzip act_arrs
+    	       -- let (gis', his') = unzip fin_arrs
+               let data = partition2D_true data cs
+               let l_act = length data
+               let data = data :> [l_act][d]u16
+               let (act_arrs, fin_arrs) = partition (\x -> x.2) (zip3 gis his cs)
+               let (gis, his, _) = unzip3 act_arrs :> ([l_act]f32, [l_act]f32, [l_act]bool)
+    	       let (gis', his', _) = unzip3 fin_arrs
+               in
+               (terminal_shp, terminal_nodes, active_shp, active_splits, active_nodes,
+                data, gis, his, gis', his')
 
     	  -- permute vs scatter performance?
     	  let leaf_weights = get_leaf_weight gis' his' terminal_shp l2 eta
@@ -128,29 +134,29 @@ let error (label: f32) (pred: f32) : f32 = (label-pred)**2
 
 
 let train [n][d] (data: [n][d]f32) (labels: [n]f32) (max_depth: i64) (n_rounds: i64)
-                       (l2: f32) (eta: f32) (gamma: f32) : [n_rounds]f32 =
+                       (l2: f32) (eta: f32) (gamma: f32) = --: [n_rounds]f32 =
   let inital_preds = replicate n 0.5
   --let (data_b, bin_bounds) = map (\r -> binMap r 10i64) (transpose data) |> unzip
-  let (data_b, bin_bounds) = binMap_seq data 10
   --let data_b = transpose data_b
+  let (data_b, bin_bounds) = binMap_seq (transpose data) 256
   let results = replicate n_rounds 0.0f32
   --let ha = map (\i -> trace i) bin_bounds
   let res =
-    loop (data, labels, preds, e) = (data, labels, inital_preds, results) for i < n_rounds do
+    loop (preds, e, tree) = (inital_preds, results, []) for i < n_rounds do
       let tree  = train_round  data_b bin_bounds labels preds max_depth l2 eta gamma |> trace
-                  --:> [](i64, f32, bool, bool) data
+      --:> [](i64, f32, bool, bool) data
       let new_preds = map (\x -> predict x tree) data |> map2 (+) preds 
-      let train_error = reduce (+) 0.0 <| map2 (\l p -> error l p) labels new_preds
-      --let train_error = squared_error labels new_preds
-      let train_error = f32.sqrt (train_error/ (f32.i64 n)) --|> trace
+      let train_error = squared_error labels new_preds
+      --let train_error = f32.sqrt (train_error/ (f32.i64 n)) --|> trace
       let res1 = scatter e [i] [train_error]
       --let ha = trace train_error
       in
-      (data, labels, new_preds, res1)
+      (new_preds, res1, tree)
   in
-  res.3
+  res.1
+  --unzip4 (res.2)
           
-let main [n][d] (data: [n][d]f32) (labels: [n]f32) = train data labels 6 100 0 0.1 0
+let main [n][d] (data: [n][d]f32) (labels: [n]f32) = train data labels 6 100 0.5 0.1 0
 
 
       

@@ -31,3 +31,24 @@ let predict (x: []f32) (tree: [](i64, f32, bool, bool)) : f32 =
         (i, v, flag)
   in
   res
+
+
+
+-- loops through a tree for an element untill it reaches a leaf
+-- x: element to predict value
+-- tree: decision tree returned from training
+let predict_log (x: []f32) (tree: [](i64, f32, bool, bool)) : f32 =
+  let (_, res, _) =
+    loop (i, value, at_node)=(1, 0, true) while at_node do
+      let (d, v, missing_flag, flag) = tree[i-1]
+      in
+      if flag then
+        if x[d] < v || (x[d] == f32.nan && missing_flag) then
+          (i*2, value, at_node)
+        else
+          (i*2+1, value, at_node)
+      else
+        (i, v, flag)
+  in
+  res
+      

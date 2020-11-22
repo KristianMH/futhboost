@@ -14,7 +14,7 @@ let permute [n][m] 't (xs: [n]t) (idxs: [m]i64): *[m]t =
   map (\i -> xs[i]) idxs
 
 -- permutes 2D array
-let permute2D 't [m][d] (arr: [m][d]t) (inds: [m]i64) : *[m][d]t =
+let permute2D 't [m][d][n] (arr: [m][d]t) (inds: [n]i64) : *[n][d]t =
   map (\ind -> map (\j -> arr[ind,j]) (iota d) ) inds
       
 -- operator applied elementwise on tuple of length 2

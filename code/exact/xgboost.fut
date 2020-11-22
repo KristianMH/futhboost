@@ -187,21 +187,27 @@ let train_round [n][d] (data: [n][d]f32) (labels: [n]f32) (preds: [n]f32) (max_d
               in
                 (tree, new_conds)
       let active_node_flags = map (\x -> x.0 >= 0) new_conds
-      -- find nodes which is split
-      let (active_nodes, active_shp, active_conds, _) =
-        zip4 nodes shp new_conds active_node_flags |> filter (.3) |> unzip4
+      let (active_nodes, active_shp, active_conds, active_data, active_gis, active_his) =
+        if and active_node_flags then -- all splitting
+          (nodes, shp, new_conds, data, gis, his)
+        else if and (map (!) active_node_flags) then -- no splits needed
+          ([], [], [], [], [], [])
+        else
+           -- find nodes which is split
+           let (active_nodes, active_shp, active_conds, _) =
+             zip4 nodes shp new_conds active_node_flags |> filter (.3) |> unzip4
                                                                      
-      let flag_arr = mkFlagArray shp 0u16 1u16 active_points_length
-      let seg_offsets = scan (+) 0u16 flag_arr |> map (\t -> t-1u16)
-      -- find active data, gis, his
-      -- if filter uses scatter, consider move data into permute2D
-      -- where idxs are constructed with scatter albeit in fusion with gis his scatter op?
-      let (active_data, active_gis, active_his, _) =
-        zip4 data gis his seg_offsets |>
-        filter (\x -> let idx = i64.u16 x.3 in active_node_flags[idx]) |>
-        unzip4
-      -- let (new_data, new_gis, new_his, split_shape) =
-      --   partition_lifted_by_vals active_conds 0f32 (<) active_shp active_data active_gis active_his
+           let flag_arr = mkFlagArray shp 0u16 1u16 active_points_length
+           let seg_offsets = scan (+) 0u16 flag_arr |> map (\t -> t-1u16)
+           -- find active data, gis, his
+           -- if filter uses scatter, consider move data into permute2D
+           -- where idxs are constructed with scatter albeit in fusion with gis his scatter op?
+           let (active_data, active_gis, active_his, _) =
+             zip4 data gis his seg_offsets |>
+             filter (\x -> let idx = i64.u16 x.3 in active_node_flags[idx]) |>
+             unzip4
+           in
+             (active_nodes, active_shp, active_conds, active_data, active_gis, active_his)
       let (permutation_idx, split_shape) =
         partition_lifted_idx active_conds (<) active_shp active_data
       let new_data = permute2D active_data  permutation_idx
@@ -238,21 +244,19 @@ let train [n][d] (data: [n][d]f32) (labels: [n]f32) (max_depth: i64) (n_rounds: 
   let inital_preds = replicate n 0.5
   let res1 = replicate n_rounds 0.0
   let res =
-    loop (data, labels, preds, e) = (data, labels, inital_preds, res1) for i < n_rounds do
+    loop (preds, e, tree) = (inital_preds, res1, []) for i < n_rounds do
       let tree  = train_round data labels preds max_depth l2 eta gamma --|> trace
-      --:[](i32, f32, bool, bool)
+      --:[](i64, f32, bool, bool)
       let new_preds = map (\x -> predict x tree) data |> map2 (+) preds --|> trace
-      let train_error = reduce (+) 0.0 <| map2 (\l p -> error l p) labels new_preds
-      let train_error = f32.sqrt (train_error/ (f32.i64 n))
-      let ha = trace train_error
+      let train_error = squared_error labels new_preds
       let res1 = e with [i] = train_error
 
       in
-      (data, labels, new_preds, res1)
+      (new_preds, res1, tree)
   in
-  res.3
+  res.1
           
 --let eval = train data[:,:2] data[:,2] 3 3 0.5 0.3 0
              
-let main [n][d] (data: [n][d]f32) (labels: [n]f32) = train data labels 3 200 0.5 0.3 0
+let main [n][d] (data: [n][d]f32) (labels: [n]f32) = train data labels 6 10 0.5 0.1 0
 let test = train woopdata wooptarget 3 6 0.5 0.3 0

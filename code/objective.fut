@@ -16,4 +16,15 @@ let gradient_log (pred: f32) (orig: f32) = sigmoid(pred) - orig
 let hessian_log (pred: f32) (orig: f32) =
   let temp = sigmoid (pred)
   in
-  pred*(1.0-pred) -- abs? fmaxf
+  --temp*(1-temp)
+  f32.max (temp*(1.0-temp)) 0.000000001f32 -- abs? fmaxf
+
+-- Returns sqaured error between label and prediction  --(label-pred)**2
+let squared_error [n] (labels: [n]f32) (preds: [n]f32) : f32 =
+  let err = map2 (-) labels preds |> map (**2)
+  in reduce (+) 0f32 err --|> f32.sqrt
+     |> (/(f32.i64 n)) |> f32.sqrt
+
+
+
+--let AUC_error [n] (labels: [n]bool) (preds: [n]bool) = 
