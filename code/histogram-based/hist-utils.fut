@@ -183,14 +183,14 @@ let create_histograms [n][d] (data: [n][d]u16) (gis: [n]f32) (his: [n]f32)
 -- special partition2D only returns true values for 2D array
 let partition2D_true [n][d] 't (data: [n][d]t) (conds: [n]bool) : [][d]t =
   
-  let true_idxs = map i64.bool conds |> scan (+) 0i64 -- most likely fused all together tho
+  let true_idxs = map i32.bool conds |> scan (+) 0i32 -- most likely fused all together tho
   let num_true = last true_idxs
   in
   if num_true == 0 then
     []
   else
-    let idxs = map2 (\c i -> if c then i-1 else -1i64) conds true_idxs
+    let idxs = map2 (\c i -> if c then i64.i32 i-1 else -1i64) conds true_idxs
     let ne = head (head data)
-    let num_true = num_true
+    let num_true = i64.i32 num_true
     in
     scatter2D (replicate num_true (replicate d ne)) idxs data

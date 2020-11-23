@@ -99,7 +99,8 @@ let train_round [n][d][b] (data: [n][d]u16) (bin_bounds: [d][b]f32)
           -- let ha = trace terminal_shp
           let new_entries =
             map (\x -> let (dim_id, bin_id) = (x.0, i64.u16 x.1)
-                       let value = bin_bounds[dim_id, bin_id]
+                       --let value = bin_bounds[dim_id, bin_id]
+                       let value = f32.i64 bin_id
                        in
                          (dim_id, value, x.2, true)
                 ) active_splits
@@ -109,7 +110,7 @@ let train_round [n][d][b] (data: [n][d]u16) (bin_bounds: [d][b]f32)
           -- partition_lifted_by_vals conds 0u16 (<) active_shp data gis his
           let (permutation_idx, split_shape) =
             partition_lifted_idx conds (<) active_shp data
-          let new_data = permute2D data  permutation_idx
+          let new_data = permute2D data permutation_idx
           let (new_gis, new_his) = permute (zip gis his) permutation_idx |> unzip
           
           let num_nodes = 2* length active_shp
@@ -138,22 +139,28 @@ let train [n][d] (data: [n][d]f32) (labels: [n]f32) (max_depth: i64) (n_rounds: 
   let inital_preds = replicate n 0.5
   --let (data_b, bin_bounds) = map (\r -> binMap r 10i64) (transpose data) |> unzip
   --let data_b = transpose data_b
-  let (data_b, bin_bounds) = binMap_seq (transpose data) 256
+  let b = 256
+  let (data_b, bin_bounds) = binMap_seq (transpose data) b
   let results = replicate n_rounds 0.0f32
   --let ha = map (\i -> trace i) bin_bounds
-  let res =
+  let (_, error, tree) =
     loop (preds, e, tree) = (inital_preds, results, []) for i < n_rounds do
       let tree  = train_round  data_b bin_bounds labels preds max_depth l2 eta gamma |> trace
       --:> [](i64, f32, bool, bool) data
-      let new_preds = map (\x -> predict x tree) data |> map2 (+) preds 
+      let new_preds = map (\x -> predict_bin x tree b) data_b |> map2 (+) preds 
       let train_error = squared_error labels new_preds
       --let train_error = f32.sqrt (train_error/ (f32.i64 n)) --|> trace
       let res1 = scatter e [i] [train_error]
       --let ha = trace train_error
       in
       (new_preds, res1, tree)
+  let mapped_tree = map (\x -> let (d, v, flag, miss)= x
+                               let v = bin_bounds[d, i64.f32 v]
+                               in (d, v, flag, miss)
+                        ) tree
   in
-  res.1
+  --unzip4 mapped_tree
+  error
   --unzip4 (res.2)
           
 let main [n][d] (data: [n][d]f32) (labels: [n]f32) = train data labels 6 100 0.5 0.1 0

@@ -80,7 +80,8 @@ let value_to_bin [n] (value: f32) (bin_bounds: [n]f32) (num_bins: u16) : u16 =
   else
     -- first_true returns the idxs of first true. since last bin_bounds > max value then
     -- in worst case it returns n-2 index as u16 assumes n <= u16.highest!
-    let (res, _) = map (value<) (init bin_bounds) |> first_true
+    --let (res, _) = map (value<) (init bin_bounds) |> first_true
+    let (res, _) = first_true (init bin_bounds) value
     --let ha = if !b then trace (value, bin_bounds) else (value, bin_bounds)
     in
     res
@@ -98,6 +99,8 @@ let binMap_seq [n][d] (data: [d][n]f32) (b: i64)
                       : ([n][d]u16, [d][b]f32) =
   let data_b = replicate d (replicate n 0u16)
   let bounds = replicate d (replicate b 0f32)
+  -- let data_b = replicate (n*d) 0u16
+  -- let bounds = replicate (b*d) 0f32
   let (data_b, bounds) =
     loop (data_b, bounds) = (data_b, bounds) for i < d do
     let (data_entry, bound_entry) = binMap data[i] b
@@ -108,6 +111,7 @@ let binMap_seq [n][d] (data: [d][n]f32) (b: i64)
     in
     (scatter2D data_b [i] [data_entry],
      scatter2D bounds [i] [bound_entry] )
+    --(scatter data_b data_offsets data_entry, scatter bounds bound_offsets bound_entry)
   in
   (transpose data_b, bounds)
   --(unflatten n d data_b, unflatten d b bounds)
@@ -115,7 +119,7 @@ let binMap_seq [n][d] (data: [d][n]f32) (b: i64)
 let main [n][d] (data: [n][d]f32) (labels: [n]f32) =
   let b = 256
   in
-  binMap_seq data b
+  binMap_seq (transpose data) b
   -- let (d, b) = map (\r -> binMap r b) (transpose data) |> unzip
   -- in (d,b)
 

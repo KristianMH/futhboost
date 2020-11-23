@@ -9,13 +9,17 @@ let scanExc 't [n] (op: t->t->t) (ne: t) (arr : [n]t) : [n]t =
 -- log2 of x
 let log2 x = (loop (y,c) = (x,0i32) while y > 1i32 do (y >> 1, c+1)).1
 
--- permutes array
+-- -- permutes array
 let permute [n][m] 't (xs: [n]t) (idxs: [m]i64): *[m]t =
   map (\i -> xs[i]) idxs
+-- let permute [n][m] 't (xs: [n]t) (idxs: [m]i32) : *[m]t =
+--   map (\i -> xs[i64.i32 i]) idxs
 
--- permutes 2D array
+-- -- permutes 2D array
 let permute2D 't [m][d][n] (arr: [m][d]t) (inds: [n]i64) : *[n][d]t =
   map (\ind -> map (\j -> arr[ind,j]) (iota d) ) inds
+-- let permute2D 't [m][d][n] (arr: [m][d]t) (inds: [n]i32) : *[n][d]t =
+--   map (\ind -> let ind = i64.i32 ind in map (\j -> arr[ind,j]) (iota d) ) inds
       
 -- operator applied elementwise on tuple of length 2
 let tuple_math 't (op: t -> t-> t)(n1: (t,t)) (n2: (t,t)) = (op n1.0 n2.0, op n1.1 n2.1)
@@ -44,18 +48,32 @@ let arg_max [n] (xs: [n]f32): (i64,f32) =
     in reduce_comm max (i64.lowest,f32.lowest) (zip ((iota n)) xs)
 
 
-let first_true [n] (xs: [n]bool) =
-  let max ((i1, c1): (u16, bool)) ((i2, c2): (u16, bool)) : (u16, bool) =
-    if c1 && c2 then
-      (u16.min i1 i2, c1)
-    else if c1 then
+-- let first_true [n] (xs: [n]bool) =
+--   let max ((i1, c1): (u16, bool)) ((i2, c2): (u16, bool)) : (u16, bool) =
+--     if c1 && c2 then
+--       (u16.min i1 i2, c1)
+--     else if c1 then
+--            (i1, c1)
+--     else if c2 then
+--            (i2, c2)
+--     else
+--       (i1, c1)
+--   in
+--   reduce_comm max (u16.highest, false) (zip (indices xs |> map u16.i64) xs)
+
+    
+let first_true [n] (xs: [n]f32) (value: f32) =
+  let max ((i1, c1): (u16, f32)) ((i2, c2): (u16, f32)) : (u16, f32) =
+    if c1 >= value && c2 >= value then
+      (u16.min i1 i2, f32.min c1 c2)
+    else if c1 >= value then
            (i1, c1)
-    else if c2 then
+    else if c2 >= value then
            (i2, c2)
     else
       (i1, c1)
   in
-  reduce_comm max (u16.highest, false) (zip (indices xs |> map u16.i64) xs)
+  reduce_comm max (u16.highest, f32.lowest) (zip (indices xs |> map u16.i64) xs)
 
 -- creates flag array with shape defined by shp and values val
 -- r is to specify returned length to handle compiler warnings.
