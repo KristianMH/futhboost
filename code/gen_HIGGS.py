@@ -1,7 +1,7 @@
 import numpy as np
 import futhark_data
 import pandas as pd
-from sklearn.datasets import dump_svmlight_file
+#from sklearn.datasets import dump_svmlight_file
 
 test_size=5*10**6
 

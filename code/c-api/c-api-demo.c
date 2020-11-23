@@ -66,8 +66,8 @@ int main(int argc, char** argv) {
   //const char* eval_names[2] = {"train", "test"};
   const char* eval_names[1] = {"train"};
   const char* eval_result = NULL;
-
-  for (int i = 0; i < n_trees; ++i) {
+  int i;
+  for (i = 0; i < n_trees; ++i) {
     safe_xgboost(XGBoosterUpdateOneIter(booster, i, dtrain));
     safe_xgboost(XGBoosterEvalOneIter(booster, i, eval_dmats, eval_names, 1, &eval_result));
     printf("%s\n", eval_result);
@@ -85,7 +85,7 @@ int main(int argc, char** argv) {
   //safe_xgboost(XGBoosterPredict(booster, dtest, 0, 0, 0, &out_len, &out_result));
   safe_xgboost(XGBoosterPredict(booster, dtrain, 0, 0, 0, &out_len, &out_result));
   printf("y_pred:");
-  for (int i = 0; i < 10; ++i) {
+  for (i = 0; i < 10; ++i) {
     printf("%1.4f ", out_result[i]);
   }
   printf("\n");
