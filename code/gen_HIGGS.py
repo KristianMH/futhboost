@@ -7,15 +7,17 @@ test_size=5*10**6
 
 
 data = pd.read_csv("data/HIGGS.csv", delimiter=",", header=None)
-data = data.to_numpy()[:test_size]
+data = data[:test_size].astype("float32")
+data.to_csv("data/HIGGS_training.csv", header=False, index=False)
+data = data.to_numpy()
 data = np.where(data==-999.0, np.nan, data)
-#print(data = -999.0)
-#(l, c) = data.shape
-#train = data[:, :l-test]
-print(data.shape)
-target = data[:,0].astype("float32")
+# #print(data = -999.0)
+# #(l, c) = data.shape
+# #train = data[:, :l-test]
+#print(data.shape)
+target = data[:,0]
 print(target.shape)
-data = data[:,1:].astype("float32")
+data = data[:,1:]
 print(data.shape)
 fileHandler = open("data/HIGGS_training", "wb")
 futhark_data.dump(data, fileHandler, True)
