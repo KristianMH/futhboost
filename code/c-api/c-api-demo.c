@@ -25,7 +25,7 @@ int main(int argc, char** argv) {
   // load the data
   //DMatrixHandle dtrain, dtest;
   DMatrixHandle dtrain;
-  safe_xgboost(XGDMatrixCreateFromFile("../data/HIGGS.csv?format=csv&label_column=0",
+  safe_xgboost(XGDMatrixCreateFromFile("../data/HIGGS_training.csv?format=csv&label_column=0",
                                        silent, &dtrain));
   //safe_xgboost(XGDMatrixCreateFromFile("../data/agaricus.txt.test", silent, &dtest));
 
