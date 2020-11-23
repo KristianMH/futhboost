@@ -190,7 +190,13 @@ let partition2D_true [n][d] 't (data: [n][d]t) (conds: [n]bool) : [][d]t =
     []
   else
     let idxs = map2 (\c i -> if c then i64.i32 i-1 else -1i64) conds true_idxs
+  -- let idxs = filter (.0) (zip conds true_idxs) |> unzip |> (.1) |> map (\x -> x-1)
+  -- let l = length idxs
+  -- let idxs = idxs :> [l]i32
     let ne = head (head data)
     let num_true = i64.i32 num_true
+    --let idxs = scatter (replicate l 1) (map i64.i32 idxs) (iota l)
     in
+    --permute2D data idxs
     scatter2D (replicate num_true (replicate d ne)) idxs data
+    
