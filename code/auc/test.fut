@@ -21,7 +21,7 @@ let auc_score [n] (y_true: [n]f32) (y_pred: [n]f32) =
 
   --let unique_seg1 = (copy unique_seg) with [length unique_seg-1] = true
   --let (thr, tp, _) = filter (.2) (zip3 s_p ha unique_seg) |> unzip3
-  let (thr, tps) = permute (zip s_p ha) unique_idxs |> unzip
+  let (_, tps) = permute (zip s_p ha) unique_idxs |> unzip
   let fps  = map2 (\v v1 -> f32.i64 v - v1) (map (+1) unique_idxs ) tps
 
 

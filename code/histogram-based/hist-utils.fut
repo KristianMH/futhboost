@@ -14,9 +14,7 @@ let get_leaf_weight [n][s] (gis: [n]f32) (his: [n]f32) (shp: [s]i64) (l2: f32) (
                        : [s]f32 =
   let terminal_flag_arr = mkFlagArray shp false true n
   let gissums = segmented_reduce (+) 0f32 terminal_flag_arr gis s
-  --let ha = trace gissums
   let hissums = segmented_reduce (+) 0f32 terminal_flag_arr his s
-  --let ha = trace hissums
   in
     map2 (\gs hs -> eta*(-gs/(hs+l2))) gissums hissums
     -- + min_weight
@@ -66,7 +64,6 @@ let find_split_hist [m] (g_hist: [m]f32) (h_hist: [m]f32) --(bin_bounds: [m]binb
   -- else
     let gains = map2 (\gl hl -> calc_gain gl hl g h l2 gamma na_gis_sum na_his_sum) gls hls 
     let (gains, flags) = unzip gains
-    --let ha = trace gains
     let (best_split_idx, best_gain) = arg_max gains --|> trace
     let missing_flag = flags[best_split_idx]
     let node_left = if missing_flag then
@@ -126,7 +123,6 @@ let search_splits_segs [d][s][m] (g_hists: [d][s][m]f32) (h_hists: [d][s][m]f32)
                  seg_g_hist seg_h_hist g_node h_node 
          ) g_hists h_hists :> [d][s](f32, u16, bool, node_vals, node_vals)--bin_bounds 
   let (gains, split_vals, missing_dirs, left_nodes, right_nodes) = map unzip5 best_splits_dim |> unzip5
-  let ha = map trace gains
   let dim_mat = map (\i -> replicate s i ) (iota d)
   let seg_mat = replicate d (iota s)
   -- find best splits for each seg(node) in each dim

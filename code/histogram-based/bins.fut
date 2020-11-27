@@ -82,7 +82,6 @@ let value_to_bin [n] (value: f32) (bin_bounds: [n]f32) (num_bins: u16) : u16 =
     -- in worst case it returns n-2 index as u16 assumes n <= u16.highest!
     --let (res, _) = map (value<) (init bin_bounds) |> first_true
     let (res, _) = first_true (init bin_bounds) value
-    --let ha = if !b then trace (value, bin_bounds) else (value, bin_bounds)
     in
     res
                
@@ -120,34 +119,5 @@ let main [n][d] (data: [n][d]f32) (labels: [n]f32) =
   let b = 256
   in
   binMap_seq (transpose data) b
-  -- let (d, b) = map (\r -> binMap r b) (transpose data) |> unzip
-  -- in (d,b)
 
- 
---   let (data_b, bin_bounds) = map (\r -> let rs = radix_sort_float f32.num_bits f32.get_bit r
---                                         in
---                                         binMap rs 10i64) (transpose data) |> unzip
---   in
---   bin_bounds               
-    --let t = trace (haha, split_points, sum_counts, mean_bin_size)
-    --let haha = zip3 split_points distinct_values sum_counts |> filter (.0)
 
-    -- let hehe = map (\i -> if i == length haha - 1 then
-    --                         haha[i].1
-    --                       else
-    --                       let mean_sum = f32.i64 (i+1)*mean_bin_size
-    --                       let dist_left = f32.i64 haha[i].2 - mean_sum |> f32.abs
-    --                       let dist_right = f32.i64 haha[i+1].2 - mean_sum |> f32.abs
-    --                       in
-    --                       if dist_left >= dist_right then haha[i].1 else haha[i+1].1
-    --                    ) (indices haha)
-    
-    -- let hehe = map (\i -> if i == length haha - 1 then
-    --                         haha[i].1
-    --                       else
-    --                       let mean_sum = f32.i64 (i+1)*mean_bin_size
-    --                       let dist_left = f32.i64 haha[i].2 - mean_sum |> f32.abs
-    --                       let dist_right = f32.i64 haha[i+1].2 - mean_sum |> f32.abs
-    --                       in
-    --                       if dist_left >= dist_right then haha[i].1 else haha[i+1].1
-    --                    ) (indices haha)
