@@ -26,10 +26,10 @@ let get_leaf_weight [n][s] (gis: [n]f32) (his: [n]f32) (shp: [s]i64) (l2: f32) (
 -- h: hessian sum of node
 -- Returns (gain, missing_dir)  
 let calc_gain (gl: f32) (hl: f32) (g:f32) (h: f32) (l2: f32) (gamma: f32)
-         (missing_gis_sum: f32) (missing_his_sum: f32) : (f32, bool) =
+         (missing_gis_sum: f32) (missing_his_sum: f32) (cost_no_split: f32) : (f32, bool) =
   let gr = g-gl-missing_gis_sum
   let hr = h-hl-missing_his_sum
-  let cost_no_split = g**2/(h+l2)
+  --let cost_no_split = g**2/(h+l2)
   let left = (gl+missing_gis_sum)**2/(missing_his_sum+hl+l2) + gr**2/(hr+l2) - cost_no_split
   let right = gl**2/(hl+l2)+ (gr+missing_gis_sum)**2/(missing_his_sum+hr+l2) - cost_no_split
   in
@@ -52,26 +52,26 @@ let find_split_hist [m] (g_hist: [m]f32) (h_hist: [m]f32) --(bin_bounds: [m]binb
                         (g: f32) (h: f32) (l2: f32) (gamma: f32)
                         : (f32, u16, bool, node_vals, node_vals) =
   -- if m == 1? handle
+  -- missing value sums
   let na_gis_sum = last g_hist
-  --let na_gis_sum = if na_gis_sum != 0.0 then trace na_gis_sum else na_gis_sum
   let na_his_sum = last h_hist
   let n = m-1
+  -- possible split_points
   let gls = scan (+) 0.0 (init g_hist) :> [n]f32
   let hls = scan (+) 0.0 (init h_hist) :> [n]f32
-  -- in
-  -- if (map (!= 0.0) gls |> map i32.bool |> i32.sum) == 1 then
-  --  (-1.0, 0u16, false, (0.0,0), (0.0, 0.0))
-  -- else
-    let gains = map2 (\gl hl -> calc_gain gl hl g h l2 gamma na_gis_sum na_his_sum) gls hls 
-    let (gains, flags) = unzip gains
-    let (best_split_idx, best_gain) = arg_max gains --|> trace
-    let missing_flag = flags[best_split_idx]
-    let node_left = if missing_flag then
-                      (gls[best_split_idx]+na_gis_sum, hls[best_split_idx]+na_his_sum)
+  let cost_no_split = g**2/(h+l2)
+  -- calculate quality of splits
+  let gains = map2 (\gl hl -> calc_gain gl hl g h l2 gamma na_gis_sum na_his_sum
+                              cost_no_split) gls hls 
+  let (gains, flags) = unzip gains
+  let (best_split_idx, best_gain) = arg_max gains --|> trace
+  let missing_flag = flags[best_split_idx]
+  let node_left = if missing_flag then
+                    (gls[best_split_idx]+na_gis_sum, hls[best_split_idx]+na_his_sum)
                   else
                     (gls[best_split_idx], hls[best_split_idx])
-    let node_right = tuple_math (-) (g,h) node_left
-    in (best_gain, u16.i64 best_split_idx, missing_flag, node_left, node_right)
+  let node_right = tuple_math (-) (g,h) node_left
+  in (best_gain, u16.i64 best_split_idx, missing_flag, node_left, node_right)
 
 
 -- finds the best split within each node(segment) at level i
@@ -96,6 +96,7 @@ let find_best_splits [d][s] (splits: [d][s](f32, i64, i64))
   let ne = replicate s (f32.lowest, 0, 0)
   in
   reduce_comm max ne splits --prove if max is commutative
+  -- if comm removed compiler error occurs
 
 -- maps over each dim -> map over each segment, everything should be regular with histograms
 -- returns (dim_idx, split_val, is_leaf?, missing_dir, node_left, node_right)
@@ -162,10 +163,9 @@ let create_histograms [n][d] (data: [n][d]u16) (gis: [n]f32) (his: [n]f32)
 
   in
    map (\dim_bins ->
-          let idxs = map i64.u16 dim_bins |> map2 (+) seg_offsets
-          --let ha = trace idxs
           let g_hist_entry =  replicate (num_segs*num_bins) 0.0f32
           let h_hist_entry =  replicate (num_segs*num_bins) 0.0f32
+          let idxs = map i64.u16 dim_bins |> map2 (+) seg_offsets
           let g_seg_hist = reduce_by_index g_hist_entry (+) 0.0 idxs gis
           let h_seg_hist = reduce_by_index h_hist_entry (+) 0.0 idxs his
           in  ( unflatten num_segs num_bins g_seg_hist

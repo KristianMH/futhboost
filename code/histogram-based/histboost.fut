@@ -75,6 +75,7 @@ let train_round [n][d] (data: [n][d]u16) (gis: [n]f32) (his: [n]f32) (num_bins: 
               let (terminal_shp, terminal_nodes, _) = unzip3 terminal
               -- special partition2D which only returns active data points, as terminal is ignored
               let data = partition2D_true data cs
+              --let (data, _) = zip data cs |> partition (.1) |> (.0) |> unzip
               let l_act = length data
               -- handle computer warnings
               let data = data :> [l_act][d]u16
@@ -100,11 +101,9 @@ let train_round [n][d] (data: [n][d]u16) (gis: [n]f32) (his: [n]f32) (num_bins: 
           let tree_full = scatter tree_terminal (map (\x -> x-1) active_nodes) new_entries
           -- conditions to split at. +1 as we split on bin_id
           let conds = map (\x -> (x.0, x.1+1)) active_splits
-          -- return permutation indices to permute2D and permute, to save replicates
-          let (permutation_idx, split_shape) =
-            partition_lifted_idx conds (<) active_shp data
-          let new_data = permute2D data permutation_idx
-          let (new_gis, new_his) = permute (zip gis his) permutation_idx |> unzip
+          -- partition_lifted with scatters! faster than permute
+          let (new_data, new_gis, new_his, split_shape) =
+            partition_lifted_by_vals conds 0u16 (<) active_shp data gis his
           -- number of new nodes is times 2
           let num_nodes = 2* length active_shp
           let new_shp = calc_new_shape active_shp split_shape :> [num_nodes]i64
