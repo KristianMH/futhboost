@@ -3,6 +3,10 @@ import "bins"
 import "histboost"
 import "../auc/test"
 import "../tree"
+       
+-- ==
+-- entry: main
+-- compiled input @ ../data.gz
 
 let train_class [n][d] (data: [n][d]f32) (labels: [n]f32) (max_depth: i64) (n_rounds: i64)
                        (l2: f32) (eta: f32) (gamma: f32) = --: [n_rounds]f32 =
@@ -40,4 +44,4 @@ let train_class [n][d] (data: [n][d]f32) (labels: [n]f32) (max_depth: i64) (n_ro
    (last error, auc_score labels predicts)
     
           
-let main [n][d] (data: [n][d]f32) (labels: [n]f32) = train_class data labels 6 1 0.5 0.1 0
+let main [n][d] (data: [n][d]f32) (labels: [n]f32) = train_class data labels 6 100 0.5 0.1 0

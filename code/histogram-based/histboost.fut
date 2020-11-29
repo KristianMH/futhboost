@@ -4,10 +4,9 @@ import "../util"
 import "../tree"
 import "../partition"
 
-import "woop"
 import "hist-utils"
 import "../objective"       
---import "bins"
+import "bins"
 
 -- data_b: data_points where the value has been mapped to bin_id. b-1 bin is nan_values
 -- bin_bounds: split_values for tree
