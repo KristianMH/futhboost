@@ -14,12 +14,10 @@ let train_class [n][d] (data: [n][d]f32) (labels: [n]f32) (max_depth: i64) (n_ro
   let b = 256
   let (data_b, bin_bounds) = binMap_seq (transpose data) b
   let results = replicate n_rounds 0.0f32
-  -- let ent = mktree max_depth (0i64, f32.nan, false, false)
-  -- let l = length ent
-  -- let ent = ent :> [l](i64, f32, bool, bool)
+
   let max_num_nodes = (1 << (max_depth+1)) - 1
   let trees = replicate (n_rounds*max_num_nodes) (0i64, f32.nan, false, false)
-  let (_, error, trees) =
+  let (_, errors, trees) =
     loop (preds, errors, trees) = (inital_preds, results, trees) for i < n_rounds do
       let gis = map2 gradient_log preds labels
       let his = map2 hessian_log preds labels
@@ -36,12 +34,11 @@ let train_class [n][d] (data: [n][d]f32) (labels: [n]f32) (max_depth: i64) (n_ro
       let offsets = map (+i*max_num_nodes) (indices mapped_tree)    
       let new_trees = scatter trees offsets mapped_tree
       in
-  --(new_preds, res1, scatter2D trees [i] [mapped_tree])
       (new_preds, errors1, new_trees)
-  let trees = unflatten n_rounds max_num_nodes trees
-  let predicts = predict_all data trees inital_preds
+  --let trees = unflatten n_rounds max_num_nodes trees
+  --let predicts = predict_all data trees inital_preds
   in
-   (last error, auc_score labels predicts)
-    
+  --(last error, auc_score labels predicts)
+    errors
           
 let main [n][d] (data: [n][d]f32) (labels: [n]f32) = train_class data labels 6 100 0.5 0.1 0

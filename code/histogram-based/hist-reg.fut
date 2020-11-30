@@ -13,16 +13,16 @@ let train_reg [n][d] (data: [n][d]f32) (labels: [n]f32) (max_depth: i64) (n_roun
   let b = 256
   let (data_b, bin_bounds) = binMap_seq (transpose data) b
   let results = replicate n_rounds 0.0f32
-  let ent = mktree max_depth (0i64, f32.nan, false, false)
-  let l = length ent
-  let ent = ent :> [l](i64, f32, bool, bool)
-  let trees = replicate n_rounds ent
-  let (_, error, trees) =
+
+  let max_num_nodes = (1 << (max_depth+1)) - 1
+  let trees = replicate (n_rounds*max_num_nodes) (0i64, f32.nan, false, false)
+
+  let (_, errors, trees) =
     loop (preds, e, trees) = (inital_preds, results, trees) for i < n_rounds do
       let gis = map2 gradient_mse preds labels
       let his = map2 hessian_mse preds labels
       let tree  = train_round  data_b gis his b max_depth l2 eta gamma
-                               :> [l](i64, f32, bool, bool) 
+                               --:> [l](i64, f32, bool, bool) 
       let new_preds = map (\x -> predict_bin x tree b) data_b |> map2 (+) preds 
       let train_error = squared_error labels new_preds
       let res1 = e with [i] = train_error
@@ -31,12 +31,16 @@ let train_reg [n][d] (data: [n][d]f32) (labels: [n]f32) (max_depth: i64) (n_roun
                                let v = if flag then bin_bounds[d, i64.f32 v - 1]
                                       else v
                                in (d, v, flag, miss)
-                        ) tree
+                            ) tree
+      let offsets = map (+i*max_num_nodes) (indices mapped_tree)    
+      let new_trees = scatter trees offsets mapped_tree
       in
-      (new_preds, res1, scatter2D trees [i] [mapped_tree])
-  let predicts = predict_all data trees inital_preds
+      (new_preds, res1, new_trees)
+  --let trees = unflatten n_rounds max_num_nodes trees
+  --let predicts = predict_all data trees inital_preds
   in
-  (last error, squared_error labels predicts)
+  --(last error, squared_error labels predicts)
+  errors
           
 let main [n][d] (data: [n][d]f32) (labels: [n]f32) = train_reg data labels 6 100 0.5 0.1 0
 

@@ -63,7 +63,6 @@ let findBins [n][m] (vals: [n]f32) (num_bins: u16) (dest: *[m]f32): [m]f32 =
                f32.nan
           ) (indices split_points)
     let active_split_vals = filter (\x -> !(f32.isnan x)) split_vals
-    --let ha = trace hehe
     let xg_split_vals = map (\i -> if i == (length active_split_vals-1) then
                                      2* active_split_vals[i] -- last split_val multiplied with 2.
                                                          -- lightgbm does overflow handling? do?
