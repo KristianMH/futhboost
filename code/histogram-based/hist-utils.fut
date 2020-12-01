@@ -100,7 +100,15 @@ let find_best_splits [d][s] (splits: [d][s](f32, i64, i64))
 
 
 let find_best_splits_v1 [d][s] (gains: [s][d]f32) : [s](i64, f32) =
-  map arg_max gains
+  let idxs = iota d
+  let max ((i1,d1): (i64,f32)) ((i2,d2): (i64,f32)) =
+        if d1 > d2 then (i1,d1)
+        else if d2 > d1 then (i2,d2)
+        else if i1 > i2 then (i1,d1)
+        else (i2,d2)
+   in 
+  map (\x -> reduce_comm max (-1, f32.lowest) (zip idxs x)) gains
+      -- map arg_max gains
   
 -- maps over each dim -> map over each segment, everything should be regular with histograms
 -- returns (dim_idx, split_val, is_leaf?, missing_dir, node_left, node_right)
