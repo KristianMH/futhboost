@@ -98,6 +98,10 @@ let find_best_splits [d][s] (splits: [d][s](f32, i64, i64))
   reduce_comm max ne splits --prove if max is commutative
   -- if comm removed compiler error occurs
 
+
+let find_best_splits_v1 [d][s] (gains: [s][d]f32) : [s](i64, f32) =
+  map arg_max gains
+  
 -- maps over each dim -> map over each segment, everything should be regular with histograms
 -- returns (dim_idx, split_val, is_leaf?, missing_dir, node_left, node_right)
 
@@ -124,16 +128,20 @@ let search_splits_segs [d][s][m] (g_hists: [d][s][m]f32) (h_hists: [d][s][m]f32)
                  seg_g_hist seg_h_hist g_node h_node 
          ) g_hists h_hists :> [d][s](f32, u16, bool, node_vals, node_vals)--bin_bounds 
   let (gains, split_vals, missing_dirs, left_nodes, right_nodes) = map unzip5 best_splits_dim |> unzip5
-  let dim_mat = map (\i -> replicate s i ) (iota d)
-  let seg_mat = replicate d (iota s)
+  --let dim_mat = map (\i -> replicate s i ) (iota d)
+  --let seg_mat = replicate d (iota s)
   -- find best splits for each seg(node) in each dim
-  let best_splits = find_best_splits (map3 zip3 gains dim_mat seg_mat) --|> trace
-  
+  --let best_splits = find_best_splits (map3 zip3 gains dim_mat seg_mat) --|> trace
+  -- find_best_splits should be [s][d](f32) and then arg max. gives best split and index!
+  -- reduces complexity of find_best_splits enourmusly.!!!
   -- need to add terminal leaf flag but then done.
+  let best_splits_segmnets = find_best_splits_v1 (transpose gains)
   in
-  map (\(gain, dim_id, seg_id) ->
-         if (gain > 0.0) then
-           --let ha = trace gain
+  map (\seg_id ->
+         let (dim_id, gain) = best_splits_segmnets[seg_id]
+         --let dim_id = u16.i64 dim_id
+         in
+         if gain > 0.0 then
            let split_val = split_vals[dim_id, seg_id]
            let missing_dir = missing_dirs[dim_id, seg_id]
            let left_node = left_nodes[dim_id, seg_id]
@@ -141,8 +149,20 @@ let search_splits_segs [d][s][m] (g_hists: [d][s][m]f32) (h_hists: [d][s][m]f32)
            in
              (dim_id, split_val, missing_dir, false, left_node, right_node)
          else
-           (0, 0u16, false, true, (0.0, 0.0), (0.0, 0.0))
-      ) best_splits
+             (0, 0u16, false, true, (0.0, 0.0), (0.0, 0.0))
+      ) (iota s)
+  -- map (\(gain, dim_id, seg_id) ->
+  --        if (gain > 0.0) then
+  --          --let ha = trace gain
+  --          let split_val = split_vals[dim_id, seg_id]
+  --          let missing_dir = missing_dirs[dim_id, seg_id]
+  --          let left_node = left_nodes[dim_id, seg_id]
+  --          let right_node = right_nodes[dim_id, seg_id]
+  --          in
+  --            (dim_id, split_val, missing_dir, false, left_node, right_node)
+  --        else
+  --          (0, 0u16, false, true, (0.0, 0.0), (0.0, 0.0))
+  --     ) best_splits
 
 
 
