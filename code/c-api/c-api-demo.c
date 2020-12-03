@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <math.h>
 #include <xgboost/c_api.h>
+#include <sys/time.h>
 
 #define safe_xgboost(call) {                                            \
 int err = (call);                                                       \
@@ -21,11 +22,11 @@ if (err != 0) {                                                         \
 int main(int argc, char** argv) {
   int silent = 0;
   int use_gpu = 1;  // set to 1 to use the GPU for training
-
+  struct timeval tv1, tv2;
   // load the data
   //DMatrixHandle dtrain, dtest;
   DMatrixHandle dtrain;
-  safe_xgboost(XGDMatrixCreateFromFile("../data/HIGGS_training.csv?format=csv&label_column=0",
+  safe_xgboost(XGDMatrixCreateFromFile("../data/HIGGS_5M.csv?format=csv&label_column=0",
                                        silent, &dtrain));
   //safe_xgboost(XGDMatrixCreateFromFile("../data/agaricus.txt.test", silent, &dtest));
 
@@ -44,7 +45,7 @@ int main(int argc, char** argv) {
     // this is not necessary, but provided here as an illustration
     //safe_xgboost(XGBoosterSetParam(booster, "gpu_id", "0"));
     printf("USING GPU!\n");
-    safe_xgboost(XGBoosterSetParam(booster, "max_bin", "256"));
+    safe_xgboost(XGBoosterSetParam(booster, "max_bin", "1024"));
   } else {
     // avoid evaluating objective and metric on a GPU
     safe_xgboost(XGBoosterSetParam(booster, "gpu_id", "-1"));
@@ -67,11 +68,19 @@ int main(int argc, char** argv) {
   const char* eval_names[1] = {"train"};
   const char* eval_result = NULL;
   int i;
+  gettimeofday(&tv1, NULL);
   for (i = 0; i < n_trees; ++i) {
     safe_xgboost(XGBoosterUpdateOneIter(booster, i, dtrain));
     safe_xgboost(XGBoosterEvalOneIter(booster, i, eval_dmats, eval_names, 1, &eval_result));
-    printf("%s\n", eval_result);
+    //printf("%s\n", eval_result);
   }
+  gettimeofday(&tv2, NULL);
+  printf ("Total time elapsed: %f\n",
+	  (double) (tv2.tv_usec - tv1.tv_usec) + 
+	  (double) (tv2.tv_sec - tv1.tv_sec)*1e6);
+  safe_xgboost(XGBoosterEvalOneIter(booster, i, eval_dmats, eval_names, 1, &eval_result));
+  printf("%s\n", eval_result);
+
 
   bst_ulong num_feature = 0;
   safe_xgboost(XGBoosterGetNumFeature(booster, &num_feature));
