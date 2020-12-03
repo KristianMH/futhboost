@@ -2,8 +2,6 @@ import "../lib/github.com/diku-dk/sorts/radix_sort"
 import "../lib/github.com/diku-dk/segmented/segmented"
 import "../util" -- possible import clash with segmented_reduce?
 
-type node_vals = (f32, f32) -- gsum, hsum
-
 -- Returns the weight of elements in each node
 -- gis: gradients for nodes not splitting at level i
 -- his: hessians for nodes not splitting at level i
@@ -48,9 +46,9 @@ let calc_gain (gl: f32) (hl: f32) (g:f32) (h: f32) (l2: f32) (gamma: f32)
 -- node_left: gradient sum and hessian sum to left child
 -- node_right: gradient sum and hessian sum to right child
 -- since we are working in bins, the split_val is u16 bin_id
-let find_split_hist [m] (g_hist: [m]f32) (h_hist: [m]f32) --(bin_bounds: [m]binboundaries)
-                        (g: f32) (h: f32) (l2: f32) (gamma: f32)
-                        : (f32, u16, bool, node_vals, node_vals) =
+let find_split_hist [m] (g_hist: [m]f32) (h_hist: [m]f32)
+                        (l2: f32) (gamma: f32)
+                        : (f32, u16, bool) =
   -- if m == 1? handle
   -- missing value sums
   let na_gis_sum = last g_hist
@@ -59,6 +57,8 @@ let find_split_hist [m] (g_hist: [m]f32) (h_hist: [m]f32) --(bin_bounds: [m]binb
   -- possible split_points
   let gls = scan (+) 0.0 (init g_hist) :> [n]f32
   let hls = scan (+) 0.0 (init h_hist) :> [n]f32
+  let g = na_gis_sum + last gls
+  let h = na_his_sum + last hls
   let cost_no_split = g**2/(h+l2)
   -- calculate quality of splits
   let gains = map2 (\gl hl -> calc_gain gl hl g h l2 gamma na_gis_sum na_his_sum
@@ -66,40 +66,16 @@ let find_split_hist [m] (g_hist: [m]f32) (h_hist: [m]f32) --(bin_bounds: [m]binb
   let (gains, flags) = unzip gains
   let (best_split_idx, best_gain) = arg_max gains --|> trace
   let missing_flag = flags[best_split_idx]
-  let node_left = if missing_flag then
-                    (gls[best_split_idx]+na_gis_sum, hls[best_split_idx]+na_his_sum)
-                  else
-                    (gls[best_split_idx], hls[best_split_idx])
-  let node_right = tuple_math (-) (g,h) node_left
-  in (best_gain, u16.i64 best_split_idx, missing_flag, node_left, node_right)
+  in (best_gain, u16.i64 best_split_idx, missing_flag)
 
 
 -- finds the best split within each node(segment) at level i
--- it reduces over dimensions [d][s](gain, dimension, seg_id)
--- max function takes two lists of split candidates for two features
--- and selects the split candidation with the best gain for each segment
--- selections the one with higest dimensions if equal in gain
--- splits: [d][s](gain, dimension, seg_id)
+-- it reduces over dimensions [s][d](gain, dimension, seg_id)
+-- by applying arg_max over dimensions.
+-- For tie breakers the highest dimension is used.
+-- splits: [s][d](gain, dimension, seg_id)
 -- returns [s](gain, dimension, seg_id)
-let find_best_splits [d][s] (splits: [d][s](f32, i64, i64))
-                             : [s](f32, i64, i64) =
-  let max [s] (d1: [s](f32, i64, i64)) (d2: [s](f32, i64, i64))
-                                       : [s](f32, i64, i64) =
-    map2 (\x y ->
-            let (g1, d1, _) = x
-            let (g2, d2, _) = y
-            in
-            if g1 > g2 then x
-                  else if g2 > g1 then y
-                  else if d1 > d2 then x
-                  else y) d1 d2
-  let ne = replicate s (f32.lowest, 0, 0)
-  in
-  reduce_comm max ne splits --prove if max is commutative
-  -- if comm removed compiler error occurs
-
-
-let find_best_splits_v1 [d][s] (gains: [s][d]f32) : [s](i64, f32) =
+let find_best_splits [d][s] (gains: [s][d]f32) : [s](i64, f32) =
   let idxs = iota d
   let max ((i1,d1): (i64,f32)) ((i2,d2): (i64,f32)) =
         if d1 > d2 then (i1,d1)
@@ -110,40 +86,27 @@ let find_best_splits_v1 [d][s] (gains: [s][d]f32) : [s](i64, f32) =
   map (\x -> reduce_comm max (-1, f32.lowest) (zip idxs x)) gains
       -- map arg_max gains
   
--- maps over each dim -> map over each segment, everything should be regular with histograms
--- returns (dim_idx, split_val, is_leaf?, missing_dir, node_left, node_right)
-
 -- search for splits within each feature of all split candidates for each bin
 -- g_hist: [d][s][m]f32 gradient sums for each bin in each node in each dimension
 -- h_hist: [d][s][m]f32 hessian sums for each bin in each node in each dimension
--- g_node: [s]f32 gradient sums for each node
--- h_node: [s]f32 hessian sums for each node
 
--- Returns [s](dim_id, bin_split, missing_direction, is_leaf_flag, node_left, node_right)
+-- Returns [s](dim_id, bin_split, missing_direction, is_leaf_flag)
 -- returns for each node split_dimension split bin 
 -- node_left: gradient sum and hessian sum to left child
 -- node_right: gradient sum and hessian sum to right child
 let search_splits_segs [d][s][m] (g_hists: [d][s][m]f32) (h_hists: [d][s][m]f32)
-                              (g_node: [s]f32) (h_node: [s]f32)
-                              --(bin_bounds: [d][m]binboundaries)
-                              (l2: f32) (gamma: f32)
-                              : [s](i64, u16, bool, bool, node_vals, node_vals) =
+                                 (l2: f32) (gamma: f32)
+                                 : [s](i64, u16, bool, bool) =
   let best_splits_dim =
     map2 (\seg_g_hist seg_h_hist -> --bin_bound -> -- map over each dim
-            map4 (\g_hist h_hist g h -> -- map over each segment
+            map2 (\g_hist h_hist -> -- map over each segment
                     find_split_hist g_hist h_hist --bin_bound g h l2 gamma)
-                                    g h l2 gamma)
-                 seg_g_hist seg_h_hist g_node h_node 
-         ) g_hists h_hists :> [d][s](f32, u16, bool, node_vals, node_vals)--bin_bounds 
-  let (gains, split_vals, missing_dirs, left_nodes, right_nodes) = map unzip5 best_splits_dim |> unzip5
-  --let dim_mat = map (\i -> replicate s i ) (iota d)
-  --let seg_mat = replicate d (iota s)
-  -- find best splits for each seg(node) in each dim
-  --let best_splits = find_best_splits (map3 zip3 gains dim_mat seg_mat) --|> trace
-  -- find_best_splits should be [s][d](f32) and then arg max. gives best split and index!
-  -- reduces complexity of find_best_splits enourmusly.!!!
-  -- need to add terminal leaf flag but then done.
-  let best_splits_segmnets = find_best_splits_v1 (transpose gains)
+                                    l2 gamma)
+                 seg_g_hist seg_h_hist
+         ) g_hists h_hists :> [d][s](f32, u16, bool) 
+  let (gains, split_vals, missing_dirs) = map unzip3 best_splits_dim |> unzip3
+
+  let best_splits_segmnets = find_best_splits (transpose gains)
   in
   map (\seg_id ->
          let (dim_id, gain) = best_splits_segmnets[seg_id]
@@ -152,25 +115,11 @@ let search_splits_segs [d][s][m] (g_hists: [d][s][m]f32) (h_hists: [d][s][m]f32)
          if gain > 0.0 then
            let split_val = split_vals[dim_id, seg_id]
            let missing_dir = missing_dirs[dim_id, seg_id]
-           let left_node = left_nodes[dim_id, seg_id]
-           let right_node = right_nodes[dim_id, seg_id]
            in
-             (dim_id, split_val, missing_dir, false, left_node, right_node)
+             (dim_id, split_val, missing_dir, false)
          else
-             (0, 0u16, false, true, (0.0, 0.0), (0.0, 0.0))
+             (0, 0u16, false, true)
       ) (iota s)
-  -- map (\(gain, dim_id, seg_id) ->
-  --        if (gain > 0.0) then
-  --          --let ha = trace gain
-  --          let split_val = split_vals[dim_id, seg_id]
-  --          let missing_dir = missing_dirs[dim_id, seg_id]
-  --          let left_node = left_nodes[dim_id, seg_id]
-  --          let right_node = right_nodes[dim_id, seg_id]
-  --          in
-  --            (dim_id, split_val, missing_dir, false, left_node, right_node)
-  --        else
-  --          (0, 0u16, false, true, (0.0, 0.0), (0.0, 0.0))
-  --     ) best_splits
 
 
 

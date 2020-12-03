@@ -19,11 +19,11 @@ let train_round [n][d] (data: [n][d]u16) (gis: [n]f32) (his: [n]f32) (num_bins: 
                        : [](i64, f32, bool, bool) =
   -- create tree to scatter into. Overhead of O(2**d-1-d)
   let tree = mktree max_depth (0i64,f32.nan, false, false)
-  -- nodes consist of id, #num_elements in node and  gradient and hessian sums for node
-  let root = zip3 [1i64] [n] [(reduce (+) 0 gis, reduce (+) 0 his)]
+  -- nodes consist of id, #num_elements in node
+  let root = zip [1i64] [n]
   let (_, res, _, _, _, _) = 
-    -- nodes : [l_shp](i32, i32, (f32,f32)) are the active nodes from previous level
-    -- tree  : [max_num_nodes](i32, f32, bool, bool) is the tree computed so far,
+    -- nodes : [l_shp](i64, i64) are the active nodes from previous level
+    -- tree  : [max_num_nodes](i64, f32, bool, bool) is the tree computed so far,
     --         updated by scatters
     -- i : i32 is the current level in the tree
     -- data : [active_points_length][d]u16, active points at the current level in the tree
@@ -35,7 +35,7 @@ let train_round [n][d] (data: [n][d]u16) (gis: [n]f32) (his: [n]f32) (num_bins: 
       let his  = (his  :> [active_points_length]f32)
       let data = (data :> [active_points_length][d]u16)
       let l_shp = length nodes
-      let (nodes, shp, GH) = unzip3 (nodes :> [l_shp](i64, i64, (f32, f32)))
+      let (nodes, shp) = unzip (nodes :> [l_shp](i64, i64))
       let (new_nodes, new_tree, new_data, new_gis, new_his) =
         -- if last level of tree- all remaining nodes is converted into leafs
         if i == max_depth then
@@ -46,14 +46,13 @@ let train_round [n][d] (data: [n][d]u16) (gis: [n]f32) (his: [n]f32) (num_bins: 
           in
             ([], final_tree, [], [], [])
         else
-          let (GS, HS) = unzip GH
           -- flag_arr for calculating offsets to segmented operations matching number of nodes
           let flag_arr = mkFlagArray shp 0u16 1u16 active_points_length
           let (new_hist_gis, new_hist_his) = create_histograms data gis his flag_arr l_shp num_bins
           --let ha = trace new_hist_gis
-          let splits = search_splits_segs new_hist_gis new_hist_his GS HS l2 gamma
-    	  -- splits should be [l_shp](i64, f32, bool, bool, node_vals, node_vals)
-    	  -- (dim_idx, split_val, missing_dir, terminal_flag, left_node, right_node)
+          let splits = search_splits_segs new_hist_gis new_hist_his l2 gamma
+    	  -- splits should be [l_shp](i64, f32, bool, bool)
+    	  -- (dim_idx, split_val, missing_dir, terminal_flag)
           let terminal_node_flags = map (.3) splits |> map (!)
           
           let (terminal_shp, terminal_nodes, active_shp, active_splits, active_nodes,
@@ -107,12 +106,8 @@ let train_round [n][d] (data: [n][d]u16) (gis: [n]f32) (his: [n]f32) (num_bins: 
           let num_nodes = 2* length active_shp
           let new_shp = calc_new_shape active_shp split_shape :> [num_nodes]i64
           let active_nodes = map getChildren active_nodes |> flatten :> [num_nodes]i64
-          -- parent Gradient and hessian values for left and right child.
-          let left_nodes = map (.4) active_splits
-    	  let right_nodes = map (.5) active_splits
-    	  let GH = map2 (\ln rn -> [ln, rn]) left_nodes right_nodes
-                   |> flatten :> [num_nodes](f32,f32)
-          let new_nodes = zip3 active_nodes new_shp GH
+
+          let new_nodes = zip active_nodes new_shp
           in
               (new_nodes, tree_full, new_data, new_gis, new_his)
       in
