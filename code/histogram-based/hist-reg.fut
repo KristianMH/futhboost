@@ -22,33 +22,25 @@ let train_reg [n][d] (data: [n][d]f32) (labels: [n]f32) (max_depth: i64) (n_roun
     loop (preds, e, trees) = (inital_preds, results, trees) for i < n_rounds do
       let gis = map2 gradient_mse preds labels
       let his = map2 hessian_mse preds labels
-      let tree  = train_round  data_b gis his b max_depth l2 eta gamma
-                               --:> [l](i64, f32, bool, bool) 
+      let tree = train_round  data_b gis his b max_depth l2 eta gamma
+                              --:> [l](i64, f32, bool, bool) 
       let new_preds = map (\x -> predict_bin x tree b) data_b |> map2 (+) preds 
       let train_error = squared_error labels new_preds
       let res1 = e with [i] = train_error
       -- trees not done yet!
-      let mapped_tree = map (\x -> let (d, v, flag, miss)= x
+      let mapped_tree = map (\x -> let (d, v, miss, flag)= x
                                let v = if flag then bin_bounds[d, i64.f32 v - 1]
                                       else v
-                               in (d, v, flag, miss)
+                               in (d, v, miss, flag)
                             ) tree
       let offsets = map (+i*max_num_nodes) (indices mapped_tree)    
       let new_trees = scatter trees offsets mapped_tree
       in
       (new_preds, res1, new_trees)
-  -- let (_, errors) =
-  --   loop (preds, e) = (inital_preds, results) for i < n_rounds do
-  --     let gis = map2 gradient_mse preds labels
-  --     let his = map2 hessian_mse preds labels
-  --     let tree  = train_round  data_b gis his b max_depth l2 eta gamma
-  --     let new_preds = map (\x -> predict_bin x tree b) data_b |> map2 (+) preds 
-  --     let train_error = squared_error labels new_preds
-  --     let res1 = e with [i] = train_error
-  --     in
-  --     (new_preds, res1)
+  let ensemble = unflatten n_rounds max_num_nodes trees
+  let val_error = predict_all data ensemble 0.5
   in
-  errors
+  (last errors, squared_error labels val_error)
           
 let main [n][d] (data: [n][d]f32) (labels: [n]f32) = train_reg data labels 6 100 0.5 0.1 0
 

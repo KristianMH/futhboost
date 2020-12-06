@@ -121,9 +121,10 @@ let binMap_seq_v1 [n][d] (data: [n][d]f32) (b: i64)
     let data_offsets = iota n |> map (+offset_d)
     let bound_offsets = iota b |> map (+offset_b)
     in
-    (scatter data_b data_offsets data_entry, scatter bounds bound_offsets bound_entry)
+    (scatter data_b data_offsets data_entry,
+     scatter bounds bound_offsets bound_entry)
   in
-  (unflatten d n data_b |> transpose, unflatten b d bounds |> transpose)
+  (unflatten d n data_b |> transpose, unflatten d b bounds)
 
     
 let main [n][d] (data: [n][d]f32) (_: [n]f32) =

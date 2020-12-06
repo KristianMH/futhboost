@@ -58,10 +58,10 @@ let predict_bin (x: []u16) (tree: [](i64, f32, bool, bool)) (b: i64): f32 =
 
 
 let predict_all [n][d][l][m] (data: [n][d]f32) (trees: [m][l](i64,f32,bool,bool))
-                             (bias: [n]f32) : [n]f32 =
+                             (bias: f32) : [n]f32 =
   let pred_trees = map (\x -> map (\t -> predict x t) trees |> f32.sum) data
   in
-  map2 (+) bias pred_trees
+  map (+ bias) pred_trees
 
 -- loops through a tree for an element untill it reaches a leaf
 -- x: element to predict value
