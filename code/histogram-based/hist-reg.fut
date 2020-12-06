@@ -9,11 +9,12 @@ import "../tree"
 
 let train_reg [n][d] (data: [n][d]f32) (labels: [n]f32) (max_depth: i64) (n_rounds: i64)
                        (l2: f32) (eta: f32) (gamma: f32) = -- : [n_rounds]f32 =
-  let inital_preds = replicate n 0.5
   let b = 256
-  let (data_b, bin_bounds) = binMap_seq (transpose data) b
-  let results = replicate n_rounds 0.0f32
+  --let (data_b, bin_bounds) = binMap_seq (transpose data) b
+  let (data_b, bin_bounds) = binMap_seq_v1 data b
 
+  let inital_preds = replicate n 0.5
+  let results = replicate n_rounds 0.0f32
   let max_num_nodes = (1 << (max_depth+1)) - 1
   let trees = replicate (n_rounds*max_num_nodes) (0i64, f32.nan, false, false)
 
@@ -36,10 +37,17 @@ let train_reg [n][d] (data: [n][d]f32) (labels: [n]f32) (max_depth: i64) (n_roun
       let new_trees = scatter trees offsets mapped_tree
       in
       (new_preds, res1, new_trees)
-  --let trees = unflatten n_rounds max_num_nodes trees
-  --let predicts = predict_all data trees inital_preds
+  -- let (_, errors) =
+  --   loop (preds, e) = (inital_preds, results) for i < n_rounds do
+  --     let gis = map2 gradient_mse preds labels
+  --     let his = map2 hessian_mse preds labels
+  --     let tree  = train_round  data_b gis his b max_depth l2 eta gamma
+  --     let new_preds = map (\x -> predict_bin x tree b) data_b |> map2 (+) preds 
+  --     let train_error = squared_error labels new_preds
+  --     let res1 = e with [i] = train_error
+  --     in
+  --     (new_preds, res1)
   in
-  --(last error, squared_error labels predicts)
   errors
           
 let main [n][d] (data: [n][d]f32) (labels: [n]f32) = train_reg data labels 6 100 0.5 0.1 0

@@ -47,7 +47,8 @@ let train_round [n][d] (data: [n][d]u16) (gis: [n]f32) (his: [n]f32) (num_bins: 
             ([], final_tree, [], [], [])
         else
           -- flag_arr for calculating offsets to segmented operations matching number of nodes
-          let flag_arr = mkFlagArray shp 0u16 1u16 active_points_length
+          --let flag_arr = mkFlagArray shp 0u16 1u16 active_points_length
+          let flag_arr = mkFlagArray shp 0 1 active_points_length
           let (new_hist_gis, new_hist_his) = create_histograms data gis his flag_arr l_shp num_bins
           --let ha = trace new_hist_gis
           let splits = search_splits_segs new_hist_gis new_hist_his l2 gamma
@@ -63,9 +64,11 @@ let train_round [n][d] (data: [n][d]u16) (gis: [n]f32) (his: [n]f32) (num_bins: 
               (shp, nodes, [], [], [], [], [], [], gis, his)
             else
               -- number idxs array. u16 is current max number of nodes.
-              let seg_idxs = scan (+) 0u16 flag_arr
+              --let seg_idxs = scan (+) 0u16 flag_arr
+              let seg_idxs = scan (+) 0 flag_arr
               -- create boolean array to remove dead data
-              let cs = map (\i -> let i = i64.u16 (i-1)  in terminal_node_flags[i]) seg_idxs
+              --let cs = map (\i -> let i = i64.u16 (i-1)  in terminal_node_flags[i]) seg_idxs
+              let cs = map (\i -> terminal_node_flags[i-1]) seg_idxs
               -- terminal and active shp, node idxs
               let (active, terminal) = partition (\x -> !(x.2).3) (zip3 shp nodes splits)
               
@@ -90,9 +93,8 @@ let train_round [n][d] (data: [n][d]u16) (gis: [n]f32) (his: [n]f32) (num_bins: 
           let tree_terminal = scatter tree (map (\x -> x-1) terminal_nodes) terminal_entries
           -- split values in intermediate tree is bin_id
           let new_entries =
-            map (\x -> let (dim_id, bin_id) = (x.0, i64.u16 x.1)
-                       --let value = bin_bounds[dim_id, bin_id]
-                       let value = f32.i64 bin_id + 1.0
+            map (\x -> let (dim_id, bin_id) = (x.0, f32.u16 x.1)
+                       let value = bin_id + 1.0
                        in
                          (dim_id, value, x.2, true)
                 ) active_splits

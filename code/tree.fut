@@ -38,7 +38,7 @@ let predict (x: []f32) (tree: [](i64, f32, bool, bool)) : f32 =
 let predict_bin (x: []u16) (tree: [](i64, f32, bool, bool)) (b: i64): f32 =
   let nan_bin = u16.i64 b-1
   let (_, res, _) =
-    loop (i, value, at_node)=(1, 0, true) while at_node do
+    loop (i, _, at_node)=(1, 0, true) while at_node do
       let (d, v, missing_flag, flag) = tree[i-1]
       
       in
