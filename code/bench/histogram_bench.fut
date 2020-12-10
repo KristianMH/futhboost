@@ -10,7 +10,7 @@ import "../util"
 -- input @ histogram_bench_data/bench_20000000_512
 entry num_ele [n][d][l] (data: [n][d]u16) (gis: [n]f32) (his: [n]f32)
               (shp: [l]i64) (num_bins: i64) =
-  let flag_arr = mkFlagArray shp 0u16 1u16 n
+  let flag_arr = mkFlagArray shp 0 1 n
   in
   create_histograms data gis his flag_arr l num_bins
 
@@ -27,6 +27,6 @@ entry num_ele [n][d][l] (data: [n][d]u16) (gis: [n]f32) (his: [n]f32)
 -- input @ histogram_bench_data/bench_4096_10000000
 entry num_segs [n][d][l] (data: [n][d]u16) (gis: [n]f32) (his: [n]f32)
                (shp: [l]i64) (num_bins: i64) =
-  let flag_arr = mkFlagArray shp 0u16 1u16 n
+  let flag_arr = mkFlagArray shp 0 1 n
   in
   create_histograms data gis his flag_arr l num_bins
