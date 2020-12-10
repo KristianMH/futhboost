@@ -220,8 +220,8 @@ let train_reg [n][d] (data: [n][d]f32) (labels: [n]f32) (max_depth: i64) (n_roun
   let val_error = predict_all data flat_ensemble offsets 0.5
                   |> squared_error labels
   in
---(last errors, val_error)
-  errors
+  (last errors, val_error)
+  --errors
 -- ==
 -- entry: main
 -- compiled input @ ../data.gz 
