@@ -22,6 +22,7 @@ let findBins [n][m] (vals: [n]f32) (num_bins: i64) (dest: *[m]f32): [m]f32 =
   let distinct_values = zip rest unique_start |> filter (\x -> x.1) |> unzip |> (.0)
   let num_unique = length distinct_values
   let bins_left = num_bins-1
+
   in
     if num_unique <= bins_left then
       -- less split_bounds then binds simply map split values
@@ -34,8 +35,8 @@ let findBins [n][m] (vals: [n]f32) (num_bins: i64) (dest: *[m]f32): [m]f32 =
         (scatter dest (indices vals) vals) with [m-1]=f32.nan -- needed nan?
     else
       -- count number of occurences of each unique value
-      let counts = segmented_reduce (+) 0 unique_start (replicate num_values 1i32) num_unique
-               |> map i64.i32
+      let counts = segmented_reduce (+) 0 unique_start (replicate num_values 1) num_unique
+                                    :> [num_unique]i64
       -- mean number of values in each bin
       let mean_bin_size = f32.i64 (n-na_count) / f32.i64 bins_left
       let sum_counts = scan (+) 0 counts |> map f32.i64
@@ -48,6 +49,7 @@ let findBins [n][m] (vals: [n]f32) (num_bins: i64) (dest: *[m]f32): [m]f32 =
 
       -- number of splits accumulated, used for calculating distances
       let num_splits = map i64.bool split_points |> scan (+) 0
+      let nsplit = last num_splits
       -- returns nan for non splits
       let split_vals =
         map (\i ->
@@ -65,8 +67,8 @@ let findBins [n][m] (vals: [n]f32) (num_bins: i64) (dest: *[m]f32): [m]f32 =
                else
                  f32.nan
             ) (indices split_points)
-    let active_split_vals = filter (\x -> !(f32.isnan x)) split_vals :> [bins_left]f32
-    let split_vals = map (\i -> if i == bins_left-1 then
+    let active_split_vals = filter (\x -> !(f32.isnan x)) split_vals :> [nsplit]f32
+    let split_vals = map (\i -> if i == nsplit-1 then
                                      2* active_split_vals[i] -- last split_val multiplied with 2.
                                                          -- lightgbm does overflow handling? do?
                                    else
