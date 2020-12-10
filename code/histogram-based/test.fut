@@ -199,11 +199,12 @@ let train_reg [n][d] (data: [n][d]f32) (labels: [n]f32) (max_depth: i64) (n_roun
       let train_error = squared_error labels new_preds
       let res1 = e with [i] = train_error
       -- trees not done yet!
-      let mapped_tree = map (\x -> let (d, v, miss, flag)= x
-                               let v = if flag >= 0 then bin_bounds[d, i64.f32 v - 1]
-                                       else v
-                               let flag = if flag >=0 then flag + total else flag
-                               in (d, v, miss, flag)
+      let mapped_tree =
+        map (\x -> let (d, v, miss, flag)= x
+                   let (v, flag ) = if flag >= 0 then
+                                      (bin_bounds[d, i64.f32 v - 1], flag + total)
+                                    else (v, flag)
+                   in (d, v, miss, flag)
                             ) tree
 
       let offsets1 = offsets with [i]=offset
@@ -224,5 +225,6 @@ let train_reg [n][d] (data: [n][d]f32) (labels: [n]f32) (max_depth: i64) (n_roun
   --errors
 -- ==
 -- entry: main
--- compiled input @ ../data.gz 
-let main [n][d] (data: [n][d]f32) (labels: [n]f32) = train_reg data labels 6 500 0.5 0.1 0
+-- compiled input @ ../data.gz
+-- input @ ../data/HIGGS_training
+let main [n][d] (data: [n][d]f32) (labels: [n]f32) = train_reg data labels 6 100 0.5 0.1 0
