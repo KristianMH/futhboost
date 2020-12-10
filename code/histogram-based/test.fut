@@ -21,7 +21,7 @@ let train_round [n][d] (data: [n][d]u16) (gis: [n]f32) (his: [n]f32) (num_bins: 
                        (max_depth: i64) (l2: f32) (eta: f32) (gamma: f32)
                        : ([](i64, f32, bool, i64), i64) =
   -- create tree to scatter into. 
-  let tree = replicate 10000 (0i64,f32.nan, false, -1)
+  let tree = replicate 20000 (0i64,f32.nan, false, -1)
   -- nodes consist of id, #num_elements in node
   let root = [n]
   let (_, res, _, _, _, _, offset) = 
@@ -98,19 +98,19 @@ let train_round [n][d] (data: [n][d]u16) (gis: [n]f32) (his: [n]f32) (num_bins: 
           let terminal_entries = map (\w ->(0i64, w, false, -1)) leaf_weights
           let nodes_to_be_written = scatter nodes_to_be_written term_idxs terminal_entries
           -- split values in intermediate tree is bin_id
-          let num_active = length act_idxs
+          let num_nodes_in_level = length nodes_to_be_written
           let new_entries =
             map2 (\x i ->
                    let (dim_id, bin_id) = (x.0, f32.u16 x.1)
                    let value = bin_id + 1.0
-                   let child = offset+num_active+i*2
+                   let child = offset+num_nodes_in_level+i*2
                    in
                          (dim_id, value, x.2, child )
                 ) active_splits (indices act_idxs) --:> [num_active](i64, f32, bool, bool)
           let nodes_to_be_written = scatter nodes_to_be_written act_idxs new_entries
 
           let tree =
-            if offset+num_active > length tree then
+            if offset+num_nodes_in_level > length tree then
               scatter (replicate (2*offset) (0, f32.nan, false, -1)) (indices tree) tree
             else
               tree
@@ -123,7 +123,7 @@ let train_round [n][d] (data: [n][d]u16) (gis: [n]f32) (his: [n]f32) (num_bins: 
 
           let new_shp = calc_new_shape active_shp split_shape
           in
-            (new_shp, tree_full, new_data, new_gis, new_his, offset+num_active)
+            (new_shp, tree_full, new_data, new_gis, new_his, offset+num_nodes_in_level)
       in
         (new_shp, new_tree, i+1, new_data, new_gis, new_his, new_offset)
   in
@@ -139,7 +139,7 @@ let predict (x: []f32) (tree: [](i64, f32, bool, i64)) (start: i64) : f32 =
       let (d, v, missing_flag, child) = tree[i]
       in
       if child >= 0 then
-        if x[d] < v || (x[d] == f32.nan && missing_flag) then
+        if x[d] < v || (f32.isnan x[d] && missing_flag) then
           (child, value, at_node)
         else
           (child+1, value, at_node)
@@ -220,8 +220,9 @@ let train_reg [n][d] (data: [n][d]f32) (labels: [n]f32) (max_depth: i64) (n_roun
   let val_error = predict_all data flat_ensemble offsets 0.5
                   |> squared_error labels
   in
-  (last errors, val_error)
+--(last errors, val_error)
+  errors
 -- ==
 -- entry: main
 -- compiled input @ ../data.gz 
-let main [n][d] (data: [n][d]f32) (labels: [n]f32) = train_reg data labels 6 100 0.5 0.1 0
+let main [n][d] (data: [n][d]f32) (labels: [n]f32) = train_reg data labels 6 500 0.5 0.1 0
