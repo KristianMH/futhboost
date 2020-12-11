@@ -163,16 +163,16 @@ let create_histograms_seq [n][d] (data: [n][d]u16) (gis: [n]f32) (his: [n]f32)
   let (gs, hs) =
     loop (gs, hs) = (gs, hs) for i < d do
       let dim_bins = data[:, i]
-      let idxs = map i64.u16 dim_bins |> map2 (+) seg_offsets  |> map (+l*i)
-      let gs1 = reduce_by_index gs (+) 0f32 idxs gis -- global hist way to slow x2!!
-      let hs1 = reduce_by_index hs (+) 0f32 idxs his
-      -- let g_hist_entry =  replicate (l) 0.0f32
-      -- let h_hist_entry =  replicate (l) 0.0f32
-      -- let g_seg_hist = reduce_by_index g_hist_entry (+) 0.0 idxs gis
-      -- let h_seg_hist = reduce_by_index h_hist_entry (+) 0.0 idxs his
-      -- let offsets = (iota l) |> map (+l*i)
-      -- let gs1 = scatter gs offsets g_seg_hist
-      -- let hs1 = scatter hs offsets h_seg_hist
+      let idxs = map i64.u16 dim_bins |> map2 (+) seg_offsets  --|> map (+l*i)
+      -- let gs1 = reduce_by_index gs (+) 0f32 idxs gis -- global hist way to slow x2!!
+      -- let hs1 = reduce_by_index hs (+) 0f32 idxs his
+      let g_hist_entry =  replicate (l) 0.0f32
+      let h_hist_entry =  replicate (l) 0.0f32
+      let g_seg_hist = reduce_by_index g_hist_entry (+) 0.0 idxs gis
+      let h_seg_hist = reduce_by_index h_hist_entry (+) 0.0 idxs his
+      let offsets = (iota l) |> map (+l*i)
+      let gs1 = scatter gs offsets g_seg_hist
+      let hs1 = scatter hs offsets h_seg_hist
       in
       (gs1, hs1)
   in
