@@ -37,6 +37,19 @@ let gain (gl: f32) (hl: f32) (g:f32) (h: f32) (l2: f32) (gamma: f32)
     else
       (1/2*right-gamma, false)
 
+-- special partition2D only returns true values for 2D array
+let partition2D_true [n][d] 't (data: [n][d]t) (conds: [n]bool) : [][d]t =
+  
+  let true_idxs = map i64.bool conds |> scan (+) 0i64 -- fused all together tho
+  let num_true = last true_idxs
+  in
+  if num_true == 0 then
+    []
+  else
+    let idxs = map2 (\c i -> if c then i-1 else -1i64) conds true_idxs
+    let ne = head (head data)
+    in
+    scatter2D (replicate num_true (replicate d ne)) idxs data
 
 -- search find best split candidate within a feature
 -- returns best gain, split_value and missing direction
@@ -64,7 +77,8 @@ let search_splits_feature [n] (data_points: [n]f32) (gis: [n]f32) (his: [n]f32)
       radix_sort_float_by_key (.0) f32.num_bits f32.get_bit rest |> unzip3
     -- since sorted, find all unique element segments
     let unique_seg_starts = map2 (!=) sorted_data (rotate (-1) sorted_data)
-    -- num unique
+    -- num unique use i32 since it is unlikely the dataset contains
+    -- more than 4 Billion unique values
     let l = map i32.bool unique_seg_starts |> i32.sum |> i64.i32
     in
       if l == 0 then -- all data points have same value cannot split
@@ -100,12 +114,11 @@ let search_splits_feature [n] (data_points: [n]f32) (gis: [n]f32) (his: [n]f32)
 -- max_depth of tree
 -- regulazation params l2, eta, gamma. eta is learning rate.
 let train_round [n][d] (data: [n][d]f32) (gis: [n]f32) (his: [n]f32) (max_depth: i64) 
-                       (l2: f32) (eta: f32) (gamma: f32) : [](i64, f32, bool, bool) =
-  let nodes = [1i64]
-  let tree = mktree max_depth (0i64, f32.nan, false, false)
-  let (final_tree, _, _, _, _, _, _) =
-    loop (tree, data, gis, his, i, nodes, shp) =
-      (tree, data, gis, his, 0, nodes, [n]) while !(null nodes) && i <= max_depth do
+                       (l2: f32) (eta: f32) (gamma: f32) : ([](i64, f32, bool, i64), i64) =
+  let tree = replicate 10000 (0i64,f32.nan, false, -1)
+  let (final_tree, _, _, _, _, _, offset) =
+    loop (tree, data, gis, his, i, shp, offset) =
+      (tree, data, gis, his, 0, [n], 0) while !(null shp) && i <= max_depth do
       -- tree: decision tree found so far
       -- data: data points in nodes at level i
       -- gis: gradients in nodes at level i
@@ -117,37 +130,32 @@ let train_round [n][d] (data: [n][d]f32) (gis: [n]f32) (his: [n]f32) (max_depth:
       let his  = (his  :> [active_points_length]f32)
       let data = (data :> [active_points_length][d]f32)
 
-      let num_nodes = length nodes
-      let nodes = nodes :> [num_nodes]i64
+      let num_nodes = length shp
       let shp = shp :> [num_nodes]i64
-
       let node_data_offsets = scanExc (+) 0 shp
-      let tmp_conds = replicate num_nodes (-1i64, f32.nan)
       -- loops over each node at level i
       -- node_splits are saved on new_conds with (dim, value)
       -- The tree is also updated with the conditation (dim, value, true, missing_dir)
       -- if node should not be split then the "leaf" is written to the tree
       -- leaf is: (0, weight, false, false)
-      let (new_tree, new_conds) =
-        loop (tree, conds) = (tree, tmp_conds) for j < num_nodes do
-
-          -- node index, offset in data and data, gis his values.
-          let node_idx = nodes[j]
+      let (new_nodes) =
+        loop (nodes) = (replicate num_nodes (0, f32.nan, false, -1))
+          for j < num_nodes do
+          -- node index, offset in data and data, gis his values.¨
           let offset = node_data_offsets[j]
           let num_points_in_node = shp[j]
           let data_in_node = data[offset:offset+num_points_in_node]
           let gis_in_node = gis[offset:offset+num_points_in_node]
           let his_in_node = his[offset:offset+num_points_in_node]
           let g_node = reduce (+) 0f32 gis_in_node
-          let h_node = reduce (+) 0f32 his_in_node
-          
+          let h_node = reduce (+) 0f32 his_in_node       
           in
             if i == max_depth then -- last level of tree i.e. all nodes should be leafs
               let weight = eta*(-g_node/(h_node+l2))
-              let leaf = (0i64, weight, false, false)
-              let tree = tree with [node_idx-1] = leaf
+              let leaf = (0i64, weight, false, -1)
+              let nodes = nodes with [j] = leaf
               in
-              (tree, conds) -- no splits since last level
+              (nodes) -- no splits since last level
             else
               let pos_splits =
                 map (\feature_vals ->
@@ -157,59 +165,73 @@ let train_round [n][d] (data: [n][d]f32) (gis: [n]f32) (his: [n]f32) (max_depth:
               -- pos_splits is [d](gain, split_value, missing_dir)
               let (gains, vals, dirs) = unzip3 pos_splits
               let (best_split_dim, best_gain) = arg_max gains
-              let (node, new_conds) =
+              let (node) =
                 if best_gain > 0f32 then
                   -- split needed. write node into tree and cond for splitting
                   let split_val = vals[best_split_dim]
                   let missing_dir = dirs[best_split_dim]
-                  let node = (best_split_dim, split_val, missing_dir, true)
-                  let new_conds = conds with [j] = (best_split_dim, split_val)
+                  let child = 1
+                  let node = (best_split_dim, split_val, missing_dir, child)
+                  --let new_conds = conds with [j] = (best_split_dim, split_val)
                   in
-                    (node, new_conds)
+                    (node)
                 else
                   -- no split, so the node is a leaf
                   let weight = eta*(-g_node/(h_node+l2))
-                  let leaf = (0i64, weight, false, false)
+                  let leaf = (0i64, weight, false, -1)
                   in
-                  (leaf, conds)
+                  (leaf)
               -- update tree with node/leaf depending on gain
-              let tree = tree with [node_idx-1] = node
+              let nodes = nodes with [j] = node
               in
-              (tree, new_conds)
-      -- get active_nodes for splitting data/gis/his 
-      let active_node_flags = map (\x -> x.0 >= 0) new_conds
-      let (active_nodes, active_shp, active_conds, active_data, active_gis, active_his) =
+              (nodes)
+      -- flags for nodes that should be split
+      let active_node_flags = map (\x -> x.3 > 0) new_nodes
+      let (active_shp, conds, _) = filter (.2) (zip3 shp new_nodes active_node_flags) |> unzip3
+      let active_conds = map (\x -> (x.0, x.1)) conds
+      let nodes_to_be_written =
+        map2 (\x i -> if active_node_flags[i] then
+                        let child = offset+num_nodes+i*2
+                        in
+                          (x.0, x.1, x.2, child)
+                      else
+                        x )
+             new_nodes (iota num_nodes)
+      let idxs = map (+offset) (indices new_nodes)
+      let tree =
+            if offset+num_nodes > length tree then
+              scatter (replicate (2*offset) (0, f32.nan, false, -1)) (indices tree) tree
+            else
+              tree
+      let new_tree = scatter tree idxs nodes_to_be_written
+      let (active_data, active_gis, active_his) =
         if and active_node_flags then -- all splitting
-          (nodes, shp, new_conds, data, gis, his)
+          (data, gis, his)
         else if and (map (!) active_node_flags) then -- no splits needed
-          ([], [], [], [], [], [])
+          ([], [], [])
         else
-           -- find nodes which is split
-           let (active_nodes, active_shp, active_conds, _) =
-             zip4 nodes shp new_conds active_node_flags |> filter (.3) |> unzip4
                                                                      
            let flag_arr = mkFlagArray shp 0 1 active_points_length
            let seg_offsets = scan (+) 0 flag_arr |> map (\t -> t-1)
            -- find active data, gis, his
-           -- if filter uses scatter, consider move data into permute2D
-           -- where idxs are constructed with scatter albeit in fusion with gis his scatter op?
-           -- this not quite optimal yet.
-           let (active_data, active_gis, active_his, _) =
-             zip4 data gis his seg_offsets |>
-             filter (\x -> let idx = x.3 in active_node_flags[idx]) |>
-             unzip4
+           let flags = map (\x -> active_node_flags[x]) seg_offsets
+           let active_data = partition2D_true data flags
+           let l_act = length active_data
+           -- handle computer warnings
+           let active_data = active_data :> [l_act][d]f32
+           let act = zip3 gis his flags |> filter (\x -> x.2)
+           let (active_gis, active_his, _) = unzip3 act :> ([l_act]f32, [l_act]f32, [l_act]bool)
            in
-           (active_nodes, active_shp, active_conds, active_data, active_gis, active_his)
+           (active_data, active_gis, active_his)
       -- lifted partiton on active data, gis and his
       let (new_data, new_gis, new_his, split_shape) =
         partition_lifted_by_vals active_conds 0f32 (<) active_shp
                                  active_data active_gis active_his
 
       let new_shp = calc_new_shape active_shp split_shape 
-      -- get node indices for nodes at level i+1
-      let new_nodes = map getChildren active_nodes |> flatten
+
       in
-        (new_tree, new_data, new_gis, new_his, i+1, new_nodes, new_shp)
+        (new_tree, new_data, new_gis, new_his, i+1, new_shp, offset+num_nodes)
   in
-  final_tree
+  (final_tree[:offset], offset)
 
