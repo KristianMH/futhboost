@@ -12,14 +12,10 @@ let log2 x = (loop (y,c) = (x,0i32) while y > 1i32 do (y >> 1, c+1)).1
 -- -- permutes array
 let permute [n][m] 't (xs: [n]t) (idxs: [m]i64): *[m]t =
   map (\i -> xs[i]) idxs
--- let permute [n][m] 't (xs: [n]t) (idxs: [m]i32) : *[m]t =
---   map (\i -> xs[i64.i32 i]) idxs
 
 -- -- permutes 2D array
 let permute2D 't [m][d][n] (arr: [m][d]t) (inds: [n]i64) : *[n][d]t =
   map (\ind -> map (\j -> arr[ind,j]) (iota d) ) inds
--- let permute2D 't [m][d][n] (arr: [m][d]t) (inds: [n]i32) : *[n][d]t =
---   map (\ind -> let ind = i64.i32 ind in map (\j -> arr[ind,j]) (iota d) ) inds
       
 -- operator applied elementwise on tuple of length 2
 let tuple_math 't (op: t -> t-> t)(n1: (t,t)) (n2: (t,t)) = (op n1.0 n2.0, op n1.1 n2.1)
@@ -27,8 +23,7 @@ let tuple_math 't (op: t -> t-> t)(n1: (t,t)) (n2: (t,t)) = (op n1.0 n2.0, op n1
 -- scatter2D array
 let scatter2D [m][d][n] 't (arr2D: *[m][d]t) (inds: [n]i64) (vals2D: [n][d]t): *[m][d]t =
   let flat_length = n*d
-  let flat_inds = map (\i -> let (k, r) = (i / d,
-                                           i % d)
+  let flat_inds = map (\i -> let (k, r) = (i / d, i % d)
                              in (inds[k]*d + r) ) (iota flat_length)
   let res = scatter (flatten arr2D) flat_inds (flatten vals2D :> [flat_length]t)
   in
@@ -77,9 +72,8 @@ let first_true [n] (xs: [n]f32) (value: f32) =
 
 -- creates flag array with shape defined by shp and values val
 -- r is to specify returned length to handle compiler warnings.
-let mkFlagArray 't [m] 
-            (shp: [m]i64) (zero: t)       
-            (flag_val: t) (r: i64) : [r]t =
+let mkFlagArray 't [m] (shp: [m]i64) (zero: t)       
+                       (flag_val: t) (r: i64) : [r]t =
   let shp_ind = scanExc (+) 0 shp
   let vals = replicate m flag_val
   in
