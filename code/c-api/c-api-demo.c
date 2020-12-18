@@ -59,17 +59,17 @@ int main(int argc, char** argv) {
 
   safe_xgboost(XGBoosterSetParam(booster, "objective", "binary:logitraw"));
   //safe_xgboost(XGBoosterSetParam(booster, "objective", "reg:squarederror"));
-  //safe_xgboost(XGBoosterSetParam(booster, "min_child_weight", "1"));
+  safe_xgboost(XGBoosterSetParam(booster, "min_child_weight", "0"));
   safe_xgboost(XGBoosterSetParam(booster, "eta", "0.1"));
   safe_xgboost(XGBoosterSetParam(booster, "reg_lambda", "0.5"));
   //safe_xgboost(XGBoosterSetParam(booster, "gamma", "0.0"));
   //safe_xgboost(XGBoosterSetParam(booster, "predictor", "gpu_predictor"));
-  safe_xgboost(XGBoosterSetParam(booster, "max_depth", "12"));
+  safe_xgboost(XGBoosterSetParam(booster, "max_depth", "6"));
   safe_xgboost(XGBoosterSetParam(booster, "missing", "-999.0"));
   safe_xgboost(XGBoosterSetParam(booster, "verbosity", silent ? "0" : "1"));
 
   // train and evaluate for 10 iterations
-  int n_trees = 500;
+  int n_trees = 100;
   //const char* eval_names[2] = {"train", "test"};
   const char* eval_names[1] = {"train"};
   const char* eval_result = NULL;
