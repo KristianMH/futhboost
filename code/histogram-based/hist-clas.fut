@@ -25,8 +25,8 @@ let train_class [n][d] (data: [n][d]f32) (labels: [n]f32) (max_depth: i64) (n_ro
       let (tree, offset)  = train_round  data_b gis his b max_depth l2 eta gamma 
                                --:> [l](i64, f32, bool, bool) 
       let new_preds = map (\x -> predict_bin x tree b 0) data_b |> map2 (+) preds 
-      let train_error = auc_score labels new_preds
-      let errors1 = errors with [i] = train_error
+      --let train_error = auc_score labels new_preds
+      --let errors1 = errors with [i] = train_error
       let mapped_tree =
         map (\x -> let (d, v, miss, flag)= x
                    let (v, flag ) = if flag >= 0 then
@@ -43,13 +43,13 @@ let train_class [n][d] (data: [n][d]f32) (labels: [n]f32) (max_depth: i64) (n_ro
       let offsets_tree = map (+total) (indices mapped_tree)
       let new_trees = scatter trees offsets_tree mapped_tree
       in
-      (new_preds, errors1, new_trees, offsets1, total + offset)
+      (new_preds, errors, new_trees, offsets1, total + offset)
   let flat_ensemble = trees[:total]
-  let offsets = scanExc (+) 0 offsets
-  let val_error = predict_all data flat_ensemble offsets 0.5
-                  |> auc_score labels
+  -- let offsets = scanExc (+) 0 offsets
+  -- let val_error = predict_all data flat_ensemble offsets 0.5
+  --                 |> auc_score labels
   in
-  (last errors, val_error)
+  last errors
   -- errors
           
-let main [n][d] (data: [n][d]f32) (labels: [n]f32) = train_class data labels 6 100 0.5 0.1 0
+let main [n][d] (data: [n][d]f32) (labels: [n]f32) = train_class data labels 6 500 0.5 0.1 0

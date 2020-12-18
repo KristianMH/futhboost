@@ -22,17 +22,16 @@ let findBins [n][m] (vals: [n]f32) (num_bins: i64) (dest: *[m]f32): [m]f32 =
   let distinct_values = zip rest unique_start |> filter (\x -> x.1) |> unzip |> (.0)
   let num_unique = length distinct_values
   let bins_left = num_bins-1
-
-  in
+  let bin_vals = 
     if num_unique <= bins_left then
       -- less split_bounds then binds simply map split values
-      let vals = map (\i -> if i == (num_unique-1) then
+      let bin_vals = map (\i -> if i == (num_unique-1) then
                               distinct_values[i]*2
                             else
                               (distinct_values[i]+distinct_values[i+1])/2.0)
                      (iota num_unique)
       in
-        (scatter dest (indices vals) vals) with [m-1]=f32.nan -- needed nan?
+        bin_vals
     else
       -- count number of occurences of each unique value
       let counts = segmented_reduce (+) 0 unique_start (replicate num_values 1) num_unique
@@ -69,14 +68,15 @@ let findBins [n][m] (vals: [n]f32) (num_bins: i64) (dest: *[m]f32): [m]f32 =
             ) (indices split_points)
     let active_split_vals = filter (\x -> !(f32.isnan x)) split_vals :> [nsplit]f32
     let split_vals = map (\i -> if i == nsplit-1 then
-                                     2* active_split_vals[i] -- last split_val multiplied with 2.
+                                  2* active_split_vals[i] -- last split_val multiplied with 2.
                                                          -- lightgbm does overflow handling? do?
                                    else
                                      (active_split_vals[i] + active_split_vals[i+1])/2.0 
                    ) (indices active_split_vals)
     in
-    (scatter dest (indices split_vals) split_vals) with [m-1] = f32.nan
-
+    split_vals
+  in
+  scatter dest (indices bin_vals) bin_vals with [m-1] = f32.nan
 let value_to_bin [n] (value: f32) (bin_bounds: [n]f32) (num_bins: u16) : u16 =
   if f32.isnan value then
      num_bins-1
@@ -84,10 +84,10 @@ let value_to_bin [n] (value: f32) (bin_bounds: [n]f32) (num_bins: u16) : u16 =
     -- first_true returns the idxs of first true. since last bin_bounds > max value then
     -- in worst case it returns n-2 index as u16 assumes n <= u16.highest!
     --let (res, _) = map (value<) (init bin_bounds) |> first_true
-    let (res, _) = first_true bin_bounds value
-    in
-    res
-               
+    --let (res, _) = first_true bin_bounds value
+    --in
+    --res
+      first_true bin_bounds value |> (.0)         
 let binMap [n] (vals: [n]f32) (num_bins: i64) : ([n]u16, [num_bins]f32) =
   let dest = replicate num_bins f32.highest
   let s_vals = radix_sort_float f32.num_bits f32.get_bit vals
