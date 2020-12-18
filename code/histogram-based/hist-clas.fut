@@ -45,11 +45,19 @@ let train_class [n][d] (data: [n][d]f32) (labels: [n]f32) (max_depth: i64) (n_ro
       in
       (new_preds, errors, new_trees, offsets1, total + offset)
   let flat_ensemble = trees[:total]
-  -- let offsets = scanExc (+) 0 offsets
-  -- let val_error = predict_all data flat_ensemble offsets 0.5
-  --                 |> auc_score labels
+  let offsets = scanExc (+) 0 offsets
+  let val_error = predict_all data flat_ensemble offsets 0.5
+                   |> auc_score labels
   in
-  last errors
+  val_error
+  --last errors
   -- errors
+
           
-let main [n][d] (data: [n][d]f32) (labels: [n]f32) = train_class data labels 6 500 0.5 0.1 0
+let main [n][d] (data: [n][d]f32) (labels: [n]f32) = train_class data labels 6 100 0.5 0.1 0
+
+-- ==
+-- entry: timings
+-- input @ ../data/HIGGS_training
+entry timings [n][d] (data: [n][d]f32) (labels: [n]f32) =
+  train_class data labels 6 100 0.5 0.1 0
