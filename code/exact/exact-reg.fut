@@ -27,10 +27,9 @@ let train_reg [n][d] (data: [n][d]f32) (labels: [n]f32) (max_depth: i64) (n_roun
       let mapped_tree =
         map (\x -> let (d, v, miss, flag)= x
                    let (flag) = if flag >= 0 then
-                                      (flag + total)
-                                    else (flag)
-                   in (d, v, miss, flag)
-                            ) tree
+                                      flag + total
+                                    else flag
+                   in (d, v, miss, flag) ) tree
 
       let offsets1 = offsets with [i]=offset
       let trees = if total+offset > length trees then
@@ -48,4 +47,4 @@ let train_reg [n][d] (data: [n][d]f32) (labels: [n]f32) (max_depth: i64) (n_roun
   in
   (last errors, val_error)
   --errors
-let main [n][d] (data: [n][d]f32) (labels: [n]f32) = train_reg data labels 6 10 0.5 0.1 0
+let main [n][d] (data: [n][d]f32) (labels: [n]f32) = train_reg data labels 6 2 0.5 0.1 0

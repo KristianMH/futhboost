@@ -87,13 +87,12 @@ let partition_lifted_by_vals [n][l][d] 't (conds: [l](i64, t, bool)) (ne: t)
                                   (gis: [n]f32) (his: [n]f32)
                                   : ([n][d]t, [n]f32, [n]f32, [l]i64) =
   let flag_arr = mkFlagArray shp 0 1 n
-  let bool_flag_arr = map bool.i64 flag_arr
   let seg_offsets_idx = scan (+) 0 flag_arr |> map (\x -> x-1)
   let cs = map2 (\v i -> let (dim, cond_val, flag) = conds[i]
                          in op v[dim] cond_val || (isnan v[dim] && flag)) vals seg_offsets_idx
-
   let true_ints = map i64.bool cs
   let false_ints = map (\x -> 1-x) true_ints
+  let bool_flag_arr = map bool.i64 flag_arr
   let true_offsets = segmented_scan (+) 0 bool_flag_arr true_ints
   let false_offsets = segmented_scan (+) 0 bool_flag_arr false_ints
   let seg_offsets = scanExc (+) 0 shp

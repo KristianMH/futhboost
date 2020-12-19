@@ -77,9 +77,7 @@ let search_splits_feature [n] (data_points: [n]f32) (gis: [n]f32) (his: [n]f32)
       radix_sort_float_by_key (.0) f32.num_bits f32.get_bit rest |> unzip3
     -- since sorted, find all unique element segments
     let unique_seg_starts = map2 (!=) sorted_data (rotate (-1) sorted_data)
-    -- num unique use i32 since it is unlikely the dataset contains
-    -- more than 4 Billion unique values
-    let l = map i32.bool unique_seg_starts |> i32.sum |> i64.i32
+    let l = map i64.bool unique_seg_starts |> i64.sum
     in
       if l == 0 then -- all data points have same value cannot split
         (-1f32, f32.nan, false)
@@ -189,14 +187,16 @@ let train_round [n][d] (data: [n][d]f32) (gis: [n]f32) (his: [n]f32) (max_depth:
       let active_node_flags = map (\x -> x.3 > 0) new_nodes
       let (active_shp, conds, _) = filter (.2) (zip3 shp new_nodes active_node_flags) |> unzip3
       let active_conds = map (\x -> (x.0, x.1, x.2)) conds
+      let children_offsets = map i64.bool active_node_flags |> scan (+) 0
+                             |> map (\x -> x-1) |> map (*2)
       let nodes_to_be_written =
-        map2 (\x i -> if active_node_flags[i] then
-                        let child = offset+num_nodes+i*2
+        map3 (\x i o -> if active_node_flags[i] then
+                        let child = offset+num_nodes+o
                         in
                           (x.0, x.1, x.2, child)
                       else
                         x )
-             new_nodes (iota num_nodes)
+             new_nodes (iota num_nodes) children_offsets
       let idxs = map (+offset) (indices new_nodes)
       let tree =
             if offset+num_nodes > length tree then
