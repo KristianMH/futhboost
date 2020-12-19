@@ -113,10 +113,12 @@ let train_round [n][d] (data: [n][d]u16) (gis: [n]f32) (his: [n]f32) (num_bins: 
               tree
           let tree_full = scatter tree (map (+offset) idxs) nodes_to_be_written
           -- conditions to split at. +1 as we split on bin_id
-          let conds = map (\x -> (x.0, x.1+1)) active_splits
+          let conds = map (\x -> (x.0, x.1+1, x.2)) active_splits
           -- partition_lifted with scatters! faster than permute
+          let nan_bin = u16.i64 num_bins
+          let isnan (x: u16) : bool = x == nan_bin
           let (new_data, new_gis, new_his, split_shape) =
-            partition_lifted_by_vals conds 0u16 (<) active_shp data gis his
+            partition_lifted_by_vals conds 0u16 (<) isnan active_shp data gis his
 
           let new_shp = calc_new_shape active_shp split_shape
           in
