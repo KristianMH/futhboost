@@ -84,28 +84,18 @@ let partition_lifted_idx [n][l][d] 't (conds: [l](i64, t)) (op: t -> t -> bool) 
 let partition_lifted_by_vals [n][l][d] 't (conds: [l](i64, t)) (ne: t) (op: t -> t -> bool)
                                   (shp: [l]i64) (vals: [n][d]t) (gis: [n]f32) (his: [n]f32)
                                   : ([n][d]t, [n]f32, [n]f32, [l]i64) =
-  --let flag_arr = mkFlagArray shp 0u16 1u16 n
   let flag_arr = mkFlagArray shp 0 1 n
-  --let bool_flag_arr = map bool.u16 flag_arr
-  let bool_flag_arr = map bool.i64 flag_arr
-  --let seg_offsets_idx = scan (+) 0u16 flag_arr |> map (\x -> x-1u16)
   let seg_offsets_idx = scan (+) 0 flag_arr |> map (\x -> x-1)
-  -- let cs = map2 (\v i -> let (dim, cond_val) = conds[i64.u16 i]
-  --                        in op v[dim] cond_val) vals seg_offsets_idx
   let cs = map2 (\v i -> let (dim, cond_val) = conds[i]
                          in op v[dim] cond_val) vals seg_offsets_idx
 
   let true_ints = map i64.bool cs
   let false_ints = map (\x -> 1-x) true_ints
+   let bool_flag_arr = map bool.i64 flag_arr
   let true_offsets = segmented_scan (+) 0 bool_flag_arr true_ints
   let false_offsets = segmented_scan (+) 0 bool_flag_arr false_ints
   let seg_offsets = scanExc (+) 0 shp
   let num_true_in_segs = segmented_reduce (+) 0 bool_flag_arr true_ints l
-  -- let true_val_offsets =
-  --   map2 (\x i -> x + seg_offsets[i64.u16 i]) true_offsets seg_offsets_idx
-  -- let false_val_offsets =
-  --   map2 (\x i -> x + seg_offsets[i64.u16 i] + num_true_in_segs[i64.u16 i])
-  --        false_offsets seg_offsets_idx
   let true_val_offsets =  map2 (\x i -> x + seg_offsets[i]) true_offsets seg_offsets_idx
   let false_val_offsets = map2 (\x i -> x + seg_offsets[i] + num_true_in_segs[i])
                                false_offsets seg_offsets_idx
