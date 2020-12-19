@@ -188,7 +188,7 @@ let train_round [n][d] (data: [n][d]f32) (gis: [n]f32) (his: [n]f32) (max_depth:
       -- flags for nodes that should be split
       let active_node_flags = map (\x -> x.3 > 0) new_nodes
       let (active_shp, conds, _) = filter (.2) (zip3 shp new_nodes active_node_flags) |> unzip3
-      let active_conds = map (\x -> (x.0, x.1)) conds
+      let active_conds = map (\x -> (x.0, x.1, x.2)) conds
       let nodes_to_be_written =
         map2 (\x i -> if active_node_flags[i] then
                         let child = offset+num_nodes+i*2
@@ -225,7 +225,7 @@ let train_round [n][d] (data: [n][d]f32) (gis: [n]f32) (his: [n]f32) (max_depth:
            (active_data, active_gis, active_his)
       -- lifted partiton on active data, gis and his
       let (new_data, new_gis, new_his, split_shape) =
-        partition_lifted_by_vals active_conds 0f32 (<) active_shp
+        partition_lifted_by_vals active_conds 0f32 (<) f32.isnan active_shp
                                  active_data active_gis active_his
 
       let new_shp = calc_new_shape active_shp split_shape 
