@@ -5,8 +5,16 @@ import "../auc/test"
 -- ==
 -- entry: main
 -- compiled input @ ../data.gz
+
+
+-- data: 2D traning instances
+-- labels: target value to predict
+-- max_depth: maximum depth of a signle tree
+-- l2, eta, gamma: reguluzation parameters
+-- n_rounds: number of boosting rounds
+-- Performs gradient boosting using raw binary classifcation. Returns the final training error.
 let boosting_rounds [n][d] (data: [n][d]f32) (labels: [n]f32) (max_depth: i64) (n_rounds: i64)
-                       (l2: f32) (eta: f32) (gamma: f32) = --: [n_rounds]f32 =
+                       (l2: f32) (eta: f32) (gamma: f32) = 
   let inital_preds = replicate n 0.5
   let results = replicate n_rounds 0.0
   let trees = replicate 20000 (0i64, f32.nan, false, -1)
@@ -18,7 +26,7 @@ let boosting_rounds [n][d] (data: [n][d]f32) (labels: [n]f32) (max_depth: i64) (
       let gis = map2 gradient_log preds labels
       let his = map2 hessian_log preds labels
       let (tree, offset)  = findOptTree  data gis his max_depth l2 eta gamma
-                               --:> [l](i64, f32, bool, bool) 
+
       let new_preds = map (\x -> predict x tree 0) data |> map2 (+) preds 
       let train_error = auc_score labels new_preds
       let res1 = e with [i] = train_error
@@ -32,10 +40,11 @@ let boosting_rounds [n][d] (data: [n][d]f32) (labels: [n]f32) (max_depth: i64) (
             ) tree
 
       let offsets1 = offsets with [i]=offset
-      let trees = if total+offset > length trees then
-                    scatter (replicate (2*total) (0i64, f32.nan, false, -1)) (indices trees) trees
-                  else
-                    trees
+      let trees =
+        if total+offset > length trees then
+          scatter (replicate (2*total) (0i64, f32.nan, false, -1)) (indices trees) trees
+        else
+          trees
       let offsets_tree = map (+total) (indices mapped_tree)
       let new_trees = scatter trees offsets_tree mapped_tree
       in
