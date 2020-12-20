@@ -6,7 +6,7 @@ import "../tree"
 -- entry: main
 -- compiled input @ ../data.gz
 
-let train_reg [n][d] (data: [n][d]f32) (labels: [n]f32) (max_depth: i64) (n_rounds: i64)
+let boosting_rounds [n][d] (data: [n][d]f32) (labels: [n]f32) (max_depth: i64) (n_rounds: i64)
                        (l2: f32) (eta: f32) (gamma: f32) = --: [n_rounds]f32 =
   let inital_preds = replicate n 0.5
   let results = replicate n_rounds 0.0
@@ -18,7 +18,7 @@ let train_reg [n][d] (data: [n][d]f32) (labels: [n]f32) (max_depth: i64) (n_roun
       (inital_preds, results, trees, offsets, 0) for i < n_rounds do
       let gis = map2 gradient_mse preds labels
       let his = map2 hessian_mse preds labels
-      let (tree, offset)  = train_round  data gis his max_depth l2 eta gamma
+      let (tree, offset)  = findOptTree  data gis his max_depth l2 eta gamma
                                --:> [l](i64, f32, bool, bool) 
       let new_preds = map (\x -> predict x tree 0) data |> map2 (+) preds 
       let train_error = squared_error labels new_preds
@@ -47,4 +47,4 @@ let train_reg [n][d] (data: [n][d]f32) (labels: [n]f32) (max_depth: i64) (n_roun
   in
   (last errors, val_error)
   --errors
-let main [n][d] (data: [n][d]f32) (labels: [n]f32) = train_reg data labels 6 2 0.5 0.1 0
+let main [n][d] (data: [n][d]f32) (labels: [n]f32) = boosting_rounds data labels 6 2 0.5 0.1 0

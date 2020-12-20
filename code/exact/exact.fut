@@ -24,7 +24,7 @@ let get_leaf_weight [n] (gis: [n]f32) (his: [n]f32) (l2: f32) (eta: f32)
 -- missing_gis_sum: sum of gradients for points with NaN value
 -- missing_his_sum: sum of hessians for points with NaN value
 -- Returns gain and direction for missing values
-let gain (gl: f32) (hl: f32) (g:f32) (h: f32) (l2: f32) (gamma: f32)
+let quality (gl: f32) (hl: f32) (g:f32) (h: f32) (l2: f32) (gamma: f32)
          (missing_gis_sum: f32) (missing_his_sum: f32) (cost_no_split: f32): (f32, bool) =
   let gr = g-gl-missing_gis_sum
   let hr = h-hl-missing_his_sum
@@ -90,7 +90,7 @@ let search_splits_feature [n] (data_points: [n]f32) (gis: [n]f32) (his: [n]f32)
       let scan_gis = scan (+) 0f32 seg_gis
       let scan_his = scan (+) 0f32 seg_his
       let cost_no_split = g_node**2/(h_node+l2)
-      let gains = map2 (\g h -> gain g h g_node h_node l2 gamma
+      let gains = map2 (\g h -> quality g h g_node h_node l2 gamma
                                      missing_gis_sum missing_his_sum cost_no_split)
                        scan_gis scan_his
       let (best_split_idx, max_gain) = (unzip gains).0 |> arg_max
@@ -111,7 +111,7 @@ let search_splits_feature [n] (data_points: [n]f32) (gis: [n]f32) (his: [n]f32)
 -- gis, his: gradient and hessian values for input data
 -- max_depth of tree
 -- regulazation params l2, eta, gamma. eta is learning rate.
-let train_round [n][d] (data: [n][d]f32) (gis: [n]f32) (his: [n]f32) (max_depth: i64) 
+let findOptTree [n][d] (data: [n][d]f32) (gis: [n]f32) (his: [n]f32) (max_depth: i64) 
                        (l2: f32) (eta: f32) (gamma: f32) : ([](i64, f32, bool, i64), i64) =
   let tree = replicate 10000 (0i64,f32.nan, false, -1)
   let (final_tree, _, _, _, _, _, offset) =

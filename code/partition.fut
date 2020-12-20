@@ -107,38 +107,3 @@ let partition_lifted_by_vals [n][l][d] 't (conds: [l](i64, t, bool)) (ne: t)
    scatter (replicate n 0f32) idxs gis,
    scatter (replicate n 0f32) idxs his,
    num_true_in_segs)
-
--- let ha =
---   let vals = [[1,10], [0, 1], [3, 5], [100, 5], [-3, -4]]
---   let conds = [(1i64, 3), (0i64,4)]
---   let shp = [2i64, 3]
---   in
---   partition_lifted conds 42i32 (<) shp vals |> trace
--- tests partition_lifted
--- ==
--- entry: partition_lifted_test_splits
--- input { [1i64,0] [3,4] [2i64,3] [[1,10], [0, 1], [3, 5], [100, 5], [-3, -4]] }
--- output {[[0,1], [1,10], [3,5], [-3,-4], [100,5]]}
--- input { [1i64,0] [1000,1000] [2i64,3] [[1,10], [0, 1], [3, 5], [100, 5], [-3, -4]] }
--- output {[[1,10], [0, 1], [3, 5], [100, 5], [-3, -4]]}
--- input { [1i64,0] [-1000,-1000] [2i64,3] [[1,10], [0, 1], [3, 5], [100, 5], [-3, -4]] }
--- output {[[1,10], [0, 1], [3, 5], [100, 5], [-3, -4]]}
--- input {[1i64] [3] [8i64] [[10,3], [3,1], [5,2], [10, -3], [30,30], [4,3], [1,1], [3,0]]}
--- output {[[3,1], [5,2], [10,-3], [1,1], [3,0], [10,3], [30, 30], [4,3]]}
-entry partition_lifted_test_splits (dims: []i64) (conds: []i32) (shp: []i64)
-                                  (vals: [][]i32) =
-  (partition_lifted (zip dims conds) 42 (<) shp vals).0
--- missing tests. zero shp however wont be encountered in boosting trees though.
--- ==
--- entry: partition_lifted_test_idxs
--- input { [1i64,0] [3,4] [2i64,3] [[1,10], [0, 1], [3, 5], [100, 5], [-3, -4]] }
--- output {[1i64, 2]}
--- input { [1i64,0] [1000,1000] [2i64,3] [[1,10], [0, 1], [3, 5], [100, 5], [-3, -4]] }
--- output {[2i64, 3]}
--- input { [1i64,0] [-1000,-1000] [2i64,3] [[1,10], [0, 1], [3, 5], [100, 5], [-3, -4]] }
--- output {[0i64,0]}
--- input {[1i64] [3] [8i64] [[10,3], [3,1], [5,2], [10, -3], [30,30], [4,3], [1,1], [3,0]]}
--- output {[5i64]}
-entry partition_lifted_test_idxs (dims: []i64) (conds: []i32) (shp: []i64)
-                                  (vals: [][]i32) =
-  (partition_lifted (zip dims conds) 64 (<) shp vals).1

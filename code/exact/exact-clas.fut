@@ -5,7 +5,7 @@ import "../auc/test"
 -- ==
 -- entry: main
 -- compiled input @ ../data.gz
-let train_class [n][d] (data: [n][d]f32) (labels: [n]f32) (max_depth: i64) (n_rounds: i64)
+let boosting_rounds [n][d] (data: [n][d]f32) (labels: [n]f32) (max_depth: i64) (n_rounds: i64)
                        (l2: f32) (eta: f32) (gamma: f32) = --: [n_rounds]f32 =
   let inital_preds = replicate n 0.5
   let results = replicate n_rounds 0.0
@@ -17,7 +17,7 @@ let train_class [n][d] (data: [n][d]f32) (labels: [n]f32) (max_depth: i64) (n_ro
       (inital_preds, results, trees, offsets, 0) for i < n_rounds do
       let gis = map2 gradient_log preds labels
       let his = map2 hessian_log preds labels
-      let (tree, offset)  = train_round  data gis his max_depth l2 eta gamma
+      let (tree, offset)  = findOptTree  data gis his max_depth l2 eta gamma
                                --:> [l](i64, f32, bool, bool) 
       let new_preds = map (\x -> predict x tree 0) data |> map2 (+) preds 
       let train_error = auc_score labels new_preds
@@ -47,4 +47,4 @@ let train_class [n][d] (data: [n][d]f32) (labels: [n]f32) (max_depth: i64) (n_ro
   in
   errors
           
-let main [n][d] (data: [n][d]f32) (labels: [n]f32) = train_class data labels 6 500 0.5 0.1 0
+let main [n][d] (data: [n][d]f32) (labels: [n]f32) = boosting_rounds data labels 6 10 0.5 0.1 0
